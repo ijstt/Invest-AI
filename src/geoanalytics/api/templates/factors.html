@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Факторы — geoanalytics{% endblock %}
+{% block content %}
+<h1>Факторы рынка</h1>
+<p class="muted">Сырьё и валюты, влияющие на российские активы: нефть Brent и драгметаллы
+(мировая цена в USD), официальные курсы ЦБ и кросс USD/EUR. Динамика — за последний год.</p>
+
+{# L5: режим рынка во времени (HMM по vol IMOEX/USD) — цветовая полоса истории. #}
+{% if regime %}
+<div class="panel span2" style="margin:6px 0 14px;">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+    <h2 style="margin:0;">Режим рынка: <span class="tag">{{ regime.current }}</span></h2>
+    {% if regime.vol is not none %}<span class="muted">ср. vol {{ "%.2f"|format(regime.vol) }}%/день</span>{% endif %}
+  </div>
+  <svg class="chart" style="height:{{ regime.height }}px; margin-top:6px;"
+       viewBox="0 0 {{ regime.width }} {{ regime.height }}" preserveAspectRatio="none">
+    {% for c in regime.cells %}
+    <rect x="{{ c.x }}" y="0" width="{{ c.w }}" height="{{ regime.height }}"
+          fill="var(--{{ c.cls }})"><title>{{ c.label }}</title></rect>
+    {% endfor %}
+  </svg>
+  <div style="display:flex; justify-content:space-between; font-size:11px;" class="muted">
+    <span>{{ regime.first_day }}</span>
+    <span>спокойный → переходный → кризис · {{ regime.day }}</span>
+  </div>
+</div>
+{% endif %}
+
+{% macro card(c) %}
+<div class="panel">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+    <h2 style="margin:0;">{{ c.label }}</h2>
+    {% if c.change_pct is not none %}
+    <span class="{{ 'up' if c.change_pct >= 0 else 'down' }}" style="font-variant-numeric:tabular-nums;">
+      {{ '%+.2f'|format(c.change_pct) }}%</span>
+    {% endif %}
+  </div>
+  {% if c.last is not none %}
+  <div class="big" style="margin:2px 0 6px;">{{ c.last }}<span class="muted" style="font-size:14px; font-weight:400;">{% if c.unit %} {{ c.unit }}{% endif %}</span></div>
+  {% else %}
+  <div class="muted" style="margin:6px 0;">нет данных</div>
+  {% endif %}
+  {% if c.spark %}
+  <svg class="chart" viewBox="0 0 {{ c.spark.width }} {{ c.spark.height }}" preserveAspectRatio="none"
+       style="height:80px;">
+    <polyline points="{{ c.spark.points }}" style="stroke: var(--{{ 'up' if c.spark.up else 'down' }});"/>
+  </svg>
+  <div class="metric"><span class="k">диапазон</span>
+    <span class="v">{{ c.spark.min }} … {{ c.spark.max }}</span></div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<h2 style="margin-top:8px;">Сырьё</h2>
+<div class="grid">
+  {% for c in cards if c.group == 'commodity' %}{{ card(c) }}{% endfor %}
+</div>
+
+<h2 style="margin-top:22px;">Валюты</h2>
+<div class="grid">
+  {% for c in cards if c.group == 'fx' %}{{ card(c) }}{% endfor %}
+</div>
+{% endblock %}

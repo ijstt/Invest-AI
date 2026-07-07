@@ -1,0 +1,51 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "listen": "127.0.0.1",
+      "port": 10808,
+      "protocol": "socks",
+      "settings": { "auth": "noauth", "udp": true }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "158.160.235.18",
+            "port": 55555,
+            "users": [
+              { "id": "d032b750-4648-41cc-84ec-899338f09384", "encryption": "none" }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "vkvideo.ru",
+          "fingerprint": "chrome",
+          "publicKey": "ZXlSEVWadB89fgFmC7AZxiAFPPvh1r--WnEOesAcjz4",
+          "shortId": "70ecea0f9701c34c",
+          "spiderX": "/"
+        },
+        "xhttpSettings": {
+          "host": "",
+          "path": "/api/v1/update",
+          "mode": "packet-up"
+        }
+      }
+    },
+    { "tag": "direct", "protocol": "freedom" }
+  ],
+  "routing": {
+    "rules": [
+      { "type": "field", "inboundTag": ["socks-in"], "outboundTag": "proxy" }
+    ]
+  }
+}

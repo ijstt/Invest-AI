@@ -1,0 +1,12 @@
+{# Статус-фид пайплайна (Волна 6в): прозрачность «что происходит внутри». #}
+<div id="pipeline-status" hx-get="/ui/partials/status" hx-trigger="every 30s"
+     hx-swap="outerHTML" style="display:flex; gap:18px; flex-wrap:wrap; align-items:center;
+     font-size:13px;">
+  <span class="tag" style="background:var(--{{ 'up' if status.fresh else 'down' }});
+        color:#04121f;">{{ '● пайплайн активен' if status.fresh else '○ ингест отстал' }}</span>
+  {% if status.last_ingest %}<span class="muted">ингест: {{ status.last_ingest }}</span>{% endif %}
+  <span class="muted">за сутки: {{ status.docs_24h }} док.</span>
+  {% if status.unprocessed %}<span class="muted">в очереди: {{ status.unprocessed }}</span>{% endif %}
+  {% if status.last_article %}<span class="muted">статья: {{ status.last_article }}</span>{% endif %}
+  {% if status.last_alert %}<span class="muted">алерт: {{ status.last_alert }}</span>{% endif %}
+</div>

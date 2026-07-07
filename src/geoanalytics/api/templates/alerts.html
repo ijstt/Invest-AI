@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Алерты — geoanalytics{% endblock %}
+{% block content %}
+<h1>Алерты</h1>
+<p class="muted">Сработавшие триггеры за {{ hours }} ч.</p>
+
+<form class="bar" action="/ui/alerts" method="get"
+      hx-get="/ui/partials/alerts" hx-target="#alerts-feed" hx-swap="innerHTML">
+  <input type="hidden" name="hours" value="{{ hours }}">
+  <select name="severity">
+    <option value="">все уровни</option>
+    {% for s in severities %}<option value="{{ s }}" {{ 'selected' if s == severity }}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="alert_type">
+    <option value="">все типы</option>
+    {% for t in alert_types %}<option value="{{ t }}" {{ 'selected' if t == alert_type }}>{{ t }}</option>{% endfor %}
+  </select>
+  <input name="ticker" value="{{ ticker }}" placeholder="тикер" style="width:120px;">
+  <label class="muted" style="display:flex; align-items:center; gap:6px;">
+    <input type="checkbox" name="only_unacked" value="true" {{ 'checked' if only_unacked }}> только непросмотренные
+  </label>
+  <button type="submit">Фильтр</button>
+</form>
+
+<div class="panel span2" style="margin-bottom:18px;">
+  <h2>Подавление (mute)</h2>
+  {% include "_alert_mutes.html" %}
+</div>
+
+<div class="panel span2">
+  <h2>Лента</h2>
+  <div id="alerts-feed" style="margin-top:10px;">{% include "_alerts_feed.html" %}</div>
+</div>
+{% endblock %}

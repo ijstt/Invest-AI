@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Актив — geoanalytics{% endblock %}
+{% block content %}
+<h1>Аналитика актива</h1>
+
+<form class="bar" action="/ui/asset" method="get"
+      hx-get="/ui/partials/asset" hx-target="#asset-result" hx-push-url="false">
+  <input type="text" name="ticker" placeholder="Тикер, напр. SBER" list="tickers"
+         value="{{ ticker or '' }}" autocomplete="off" autofocus>
+  <datalist id="tickers">
+    {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.name }}</option>{% endfor %}
+  </datalist>
+  <button type="submit">Показать</button>
+  <span class="htmx-indicator muted">загрузка…</span>
+</form>
+
+<div id="asset-result">
+  {% if report %}{% include "_asset_result.html" %}{% endif %}
+</div>
+{% endblock %}

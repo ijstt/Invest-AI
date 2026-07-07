@@ -1,0 +1,31 @@
+{# Панель технических индикаторов с тумблером таймфрейма Д/Н/М (A7). #}
+{# hx-swap outerHTML на самом контейнере — переключатель заменяет только эту панель. #}
+<div class="panel" id="indicators-panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+    <h2 style="margin:0;">Технические индикаторы</h2>
+    <span style="display:flex; gap:6px;">
+      {% for val, lbl in [('D','Д'), ('W','Н'), ('M','М')] %}
+      <a href="#" class="tag"
+         style="{{ 'background:var(--accent);color:#04121f;' if ind_period == val }}"
+         hx-get="/ui/partials/asset/indicators?ticker={{ ticker }}&period={{ val }}"
+         hx-target="#indicators-panel" hx-swap="outerHTML">{{ lbl }}</a>
+      {% endfor %}
+    </span>
+  </div>
+  {% if indicators %}
+  {% set labels = {"last":"Цена","trend":"Тренд","rsi14":"RSI(14)",
+    "stoch_k":"Стох. %K","stoch_d":"Стох. %D","atr14":"ATR(14)",
+    "macd":"MACD","macd_signal":"MACD сигнал","macd_hist":"MACD гист.",
+    "boll_lower":"Bollinger ↓","boll_mid":"Bollinger сред.","boll_upper":"Bollinger ↑",
+    "sma50":"SMA50","sma200":"SMA200","vol_annual":"Волат., %год",
+    "obv":"OBV","vol_sma20":"Ср. объём 20","vol_ratio":"Объём ×ср.",
+    "ret_1w":"Доход. 1н, %","ret_1m":"Доход. 1м, %","ret_3m":"Доход. 3м, %",
+    "high_52w":"Макс 52н","low_52w":"Мин 52н",
+    "pct_from_52w_high":"% от макс 52н","pct_from_52w_low":"% от мин 52н"} %}
+  {% for key, label in labels.items() if key in indicators %}
+  <div class="metric"><span class="k">{{ label }}</span><span class="v">{{ indicators[key] }}</span></div>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Нет данных для расчёта на этом таймфрейме.</p>
+  {% endif %}
+</div>

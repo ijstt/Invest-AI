@@ -1,0 +1,90 @@
+[project]
+name = "geoanalytics"
+version = "0.9.0"
+description = "Аналитика геополитики и экономики с упором на рынок РФ (новости, котировки, контекст активов)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+    # CLI и вывод в терминал
+    "typer>=0.12",
+    "rich>=13.7",
+    # Конфигурация и схемы
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    # Хранилище
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.3.2",         # halfvec-тип (HALFVEC) для эмбеддингов
+    "alembic>=1.13",
+    # HTTP и парсинг источников
+    "httpx>=0.27",
+    "tenacity>=8.3",
+    "feedparser>=6.0",
+    "selectolax>=0.3",
+    "pypdf>=4.0",              # H5: извлечение текста из PDF-отчётов эмитентов
+
+    # Логирование
+    "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+# NLP-каскад (тяжёлые зависимости — ставятся отдельно по мере надобности)
+nlp = [
+    "fastembed>=0.3",          # эмбеддинги (ONNX, CPU-friendly)
+    "natasha>=1.6",            # NER для русского
+    "transformers>=4.42",      # сентимент/значимость (ruBERT, дистиллированные модели)
+    "torch>=2.3",              # бэкенд для transformers
+]
+# Дообучение encoder-моделей под домен (LoRA, M4). Тяжёлые, ставятся при обучении.
+train = [
+    "peft>=0.11",              # LoRA-адаптеры
+    "datasets>=2.19",          # загрузка/токенизация датасета
+    "accelerate>=0.30",        # бэкенд обучения Trainer
+    "numpy>=1.26",             # метрики
+]
+# Закрытые Telegram-каналы через MTProto (H3, Волна 4). Опционально: без telethon
+# коннектор telegram_mtproto тихо пропускается.
+mtproto = [
+    "telethon>=1.36",
+    "qrcode>=7.4",             # отрисовка QR в терминале для входа по QR (telegram_login.py --qr)
+]
+# Веб-интерфейс (M5): REST API + дашборд на HTMX/Jinja
+api = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",             # шаблоны дашборда
+    "python-multipart>=0.0.9", # POST-формы веб-UI (ack/mute алертов)
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",             # моки httpx в тестах
+    "ruff>=0.5",
+]
+
+[project.scripts]
+geo = "geoanalytics.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/geoanalytics"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Скрипты добавляют корень репозитория в sys.path до импортов (E402 ожидаем).
+"scripts/*" = ["E402"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

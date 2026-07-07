@@ -1,0 +1,26 @@
+# Postgres (TimescaleDB + pgvector) НА Raspberry Pi — всегда-онлайн БД для всего стека.
+# Запуск на Pi:  docker compose -f deploy/pi/docker-compose.pi.yml up -d
+# Образ тот же, что на ноуте (timescaledb-ha:pg16, мультиарх → arm64 на Pi). Ollama здесь НЕ
+# поднимается (Qwen остаётся на ноуте). restart: unless-stopped → БД встаёт сама после ребута Pi.
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    container_name: geo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${GEO_DB_USER:-geo}
+      POSTGRES_PASSWORD: ${GEO_DB_PASSWORD:-geo}
+      POSTGRES_DB: ${GEO_DB_NAME:-geoanalytics}
+    ports:
+      - "${GEO_DB_PORT:-5432}:5432"
+    volumes:
+      - geo_db_data:/home/postgres/pgdata/data
+      - ../../scripts/db-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GEO_DB_USER:-geo} -d ${GEO_DB_NAME:-geoanalytics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  geo_db_data:

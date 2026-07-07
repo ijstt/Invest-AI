@@ -1,0 +1,71 @@
+{% import "_macros.html" as ui %}
+<div>
+  <div style="margin-bottom:8px;">
+    <span class="tag">{{ r.intent }}</span>
+    {% if r.ticker %}{{ ui.asset_link(r.ticker) }}{% endif %}
+    {% if not r.used_llm %}<span class="muted" title="{{ r.note }}">· без LLM</span>{% endif %}
+  </div>
+
+  {% if r.answer %}<div style="margin-bottom:10px;">{{ r.answer }}</div>{% endif %}
+
+  {# Волна 6: портфельный блок, если актив запроса держится в портфеле владельца. #}
+  {% if r.portfolio %}
+  <div class="panel" style="margin-bottom:10px; border-left:3px solid var(--accent);">
+    <h2 style="margin-bottom:8px;">💼 {{ r.portfolio.ticker }} в портфеле</h2>
+    <div class="metric"><span class="k">Доля</span><span class="v">{{ "%.1f"|format(r.portfolio.weight_pct) }}%</span></div>
+    {% if r.portfolio.beta_market is not none %}
+    <div class="metric"><span class="k">β к рынку</span><span class="v">{{ "%+.2f"|format(r.portfolio.beta_market) }}</span></div>
+    {% endif %}
+    {% if r.portfolio.risk_contribution_pct is not none %}
+    <div class="metric"><span class="k">Вклад в риск</span><span class="v">{{ "%.0f"|format(r.portfolio.risk_contribution_pct) }}%{% if r.portfolio.var_contribution_rub is not none %} · ~{{ "{:,.0f}".format(r.portfolio.var_contribution_rub) }} ₽ VaR{% endif %}</span></div>
+    {% endif %}
+    {% if r.portfolio.correlations %}
+    <div class="metric"><span class="k">Корреляции</span><span class="v">{% for c in r.portfolio.correlations %}{{ c.ticker }} {{ "%+.2f"|format(c.r) }}{% if not loop.last %}, {% endif %}{% endfor %}</span></div>
+    {% endif %}
+    <div class="metric"><span class="k">Рекомендация</span><span class="v">{{ r.portfolio.recommendation }}</span></div>
+  </div>
+  {% endif %}
+
+  {# Трек B: идеи скринера (recommend/help) — карточки со светофором сигнала, пояснением, риском. #}
+  {% if r.recommendations %}
+  <div class="mb1">
+    <span class="muted fs-sm">💡 Идеи (образовательно, не индивид. рекомендация):</span>
+    {% for i in r.recommendations %}
+    <div class="panel" style="margin:6px 0; border-left:3px solid
+      {% if i.signal in ['buy','accumulate'] %}var(--up){% elif i.signal in ['reduce','sell'] %}var(--down){% else %}#d2a32a{% endif %};">
+      <div class="row row-wrap">
+        <span>{{ ui.asset_link(i.ticker) }} <span class="muted">{{ i.name }}</span></span>
+        <span>{{ ui.signal_badge(i.signal, i.label) }} <span class="muted fs-xs">{{ i.action }}</span></span>
+      </div>
+      {% if i.rationale %}<div class="fs-sm mt1">за: {{ i.rationale }}</div>{% endif %}
+      {% if i.risk_note %}<div class="muted fs-xs">риск: {{ i.risk_note }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if r.facts and not r.recommendations %}
+  <div style="margin-bottom:10px;">
+    {% for f in r.facts %}<div class="metric"><span class="k">{{ f }}</span></div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if r.citations %}
+  <div>
+    <span class="muted" style="font-size:13px;">Источники:</span>
+    {% for c in r.citations %}
+    <div class="metric"><span class="k">{{ ui.news_link(c.title, c.url) }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Волна 6 (в): RAG-трейс — что и насколько релевантно подтянул вектор-поиск. #}
+  {% if r.rag_trace %}
+  <details style="margin-top:10px;">
+    <summary class="muted" style="font-size:13px; cursor:pointer;">🔎 RAG-трейс ({{ r.rag_trace|length }} источн., скор близости)</summary>
+    {% for t in r.rag_trace %}
+    <div class="metric"><span class="k">{{ ui.news_link(t.title, t.url) }}</span><span class="v">{{ "%.2f"|format(t.score) }}</span></div>
+    {% endfor %}
+  </details>
+  {% endif %}
+</div>

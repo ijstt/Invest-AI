@@ -1,0 +1,5 @@
+{% if alerts %}
+{% for a in alerts %}{% include "_alert_row.html" %}{% endfor %}
+{% else %}
+<p class="muted">Нет алертов по выбранному фильтру.</p>
+{% endif %}

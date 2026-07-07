@@ -1,0 +1,18 @@
+# Числовой стек торгового процесса (Трек 2) для Raspberry Pi (ARM64).
+# Базовые зависимости (typer/rich/pydantic/sqlalchemy/psycopg[binary]/pgvector/alembic/httpx/
+# tenacity/feedparser/selectolax/pypdf/structlog) ставит `pip install -e .` из pyproject.
+# Здесь — ТОЛЬКО числовой делта-набор, который трейдер импортирует лениво в рантайме (train/eval/
+# индикаторы). Тяжёлый ML (torch/transformers/fastembed/natasha) НЕ нужен — он остаётся на главной
+# машине (инвест-каскад). Версии закреплены под главную машину для согласованности поведения
+# (joblib/sklearn-пиклы версионно-чувствительны; Pi обучает и грузит СВОИ модели локально).
+#
+# Если для точной версии нет aarch64-колеса на Pi — ослабьте пин до `>=` (см. deploy/pi/README.md).
+# SOCKS-поддержка httpx — для split-tunnel отправки алертов в Telegram через локальный Xray-SOCKS.
+socksio>=1.0
+numpy==2.2.6
+pandas==3.0.3
+pandas-ta==0.4.71b0
+scikit-learn==1.9.0
+scipy==1.17.1
+joblib==1.5.3
+threadpoolctl==3.6.0

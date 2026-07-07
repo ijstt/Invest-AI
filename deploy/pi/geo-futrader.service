@@ -1,0 +1,24 @@
+[Unit]
+Description=geoanalytics торговый цикл Трек 2 (futrader) — Raspberry Pi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# %h = домашний каталог пользователя → юнит host-agnostic (не привязан к /home/ijstt).
+# Репозиторий синхронизирован в %h/News (см. deploy/pi/README.md). PYTHONPATH даёт пакет `config`.
+WorkingDirectory=%h/News
+Environment=PYTHONPATH=%h/News
+EnvironmentFile=%h/News/deploy/pi/geo-futrader.env
+ExecStart=%h/News/.venv/bin/geo run-futrader
+# Чисто numeric (sklearn/индикаторы), без GPU/LLM. На Pi 8GB рабочий набор — сотни МБ; потолок
+# с большим запасом как защита от утечки. Подгоните под вашу Pi при желании.
+MemoryAccounting=yes
+MemoryHigh=1500M
+MemoryMax=2G
+# БД главной машины может быть недоступна (ребут/сеть) — сервис падает и повторяет попытку.
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

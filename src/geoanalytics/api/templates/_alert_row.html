@@ -1,0 +1,19 @@
+{% import "_macros.html" as ui %}
+<div class="metric" id="alert-{{ a.id }}">
+  <span class="k">
+    {% if a.severity == 'critical' %}<span class="down" title="critical">●</span>
+    {% elif a.severity == 'warning' %}<span class="flat" title="warning">●</span>
+    {% else %}<span class="muted" title="info">●</span>{% endif %}
+    {% if a.ticker %}{{ ui.asset_link(a.ticker) }} {% endif %}{{ a.title }}
+    {% if 'muted' in a.channels %}<span class="tag">🔇 muted</span>{% endif %}
+  </span>
+  <span class="v">
+    {% if a.created_at %}<span class="muted" style="font-variant-numeric:tabular-nums;">{{ a.created_at[:16]|replace('T', ' ') }}</span>{% endif %}
+    {% if a.acknowledged_at %}<span class="tag">✓ ack</span>
+    {% else %}
+    <button type="button" hx-post="/ui/alerts/{{ a.id }}/ack"
+            hx-target="#alert-{{ a.id }}" hx-swap="outerHTML"
+            style="padding:2px 9px; font-size:12px;" title="подтвердить">✓</button>
+    {% endif %}
+  </span>
+</div>

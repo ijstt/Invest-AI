@@ -1,0 +1,19 @@
+[Unit]
+Description=geoanalytics захват стакана FORTS (Трек 2 / geo-depth) — Raspberry Pi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/News
+Environment=PYTHONPATH=%h/News
+Environment=GEO_DB_HOST=127.0.0.1
+# Снимает best/спред/дисбаланс фронт-контрактов каждые 5с во время сессии (always-on на Pi).
+ExecStart=%h/News/.venv/bin/geo futures-depth capture --interval-sec 5
+MemoryAccounting=yes
+MemoryHigh=512M
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

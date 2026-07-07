@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Бэктест — geoanalytics{% endblock %}
+{% block content %}
+<h1>Бэктест сигнала</h1>
+
+<form class="bar" action="/ui/backtest" method="get"
+      hx-get="/ui/partials/backtest" hx-target="#bt-result" hx-push-url="false">
+  <input type="text" name="ticker" placeholder="Тикер, напр. SBER" list="tickers"
+         value="{{ ticker or '' }}" autocomplete="off" autofocus>
+  <datalist id="tickers">
+    {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.name }}</option>{% endfor %}
+  </datalist>
+  <select name="strategy">
+    {% for s in strategies %}
+    <option value="{{ s }}" {% if s == strategy %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Прогнать</button>
+  <span class="htmx-indicator muted">считаю…</span>
+</form>
+
+<div id="bt-result">
+  {% if result %}{% include "_backtest_result.html" %}{% endif %}
+  {% if error %}<div class="panel span2"><p class="down">{{ error }}</p></div>{% endif %}
+</div>
+{% endblock %}

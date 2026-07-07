@@ -1,0 +1,14 @@
+{# Переиспользуемые ссылки — единый источник правды для кликабельных тикеров/новостей. #}
+{% macro asset_link(ticker) -%}
+<a href="/ui/asset?ticker={{ ticker }}">{{ ticker }}</a>
+{%- endmacro %}
+
+{% macro news_link(title, url) -%}
+{% if url %}<a href="{{ url }}" target="_blank" rel="noopener">{{ title }}</a>{% else %}{{ title }}{% endif %}
+{%- endmacro %}
+
+{# Единый «светофор» сигнала стойки/рекомендации — bg-тинт по знаку (buy/hold/sell). #}
+{% macro signal_badge(signal, label) -%}
+{%- set cls = 'sig--buy' if signal in ('buy', 'accumulate') else ('sig--sell' if signal in ('reduce', 'sell') else 'sig--hold') -%}
+<span class="sig {{ cls }}">{{ label }}</span>
+{%- endmacro %}

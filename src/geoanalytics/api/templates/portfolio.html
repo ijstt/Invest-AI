@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Портфель — geoanalytics{% endblock %}
+{% block content %}
+<div id="pf-root">
+<h1>Портфель</h1>
+
+{# #4: ввод позиции прямо с дашборда (HTMX, hx-select берёт #pf-root из ответа). #}
+<form class="panel span2" hx-post="/ui/portfolio/add"
+      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
+      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+  <label>Тикер<br>
+    <select name="ticker" required>
+      {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.ticker }}{% if a.name %} — {{ a.name }}{% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Количество<br><input name="quantity" type="number" step="any" min="0" required style="width:120px;"></label>
+  <label>Цена входа<br><input name="price" type="number" step="any" min="0" placeholder="опц." style="width:120px;"></label>
+  <button type="submit">Добавить</button>
+</form>
+
+{# Расширение состава: кэш/валютный баланс (RUB по номиналу, прочие — по курсу ЦБ). #}
+<form class="panel span2" hx-post="/ui/portfolio/cash"
+      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
+      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+  <label>Валюта<br>
+    <select name="currency">
+      {% for c in ["RUB", "USD", "EUR", "CNY"] %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Остаток<br><input name="amount" type="number" step="any" placeholder="0 — удалить" style="width:140px;"></label>
+  <button type="submit">Задать кэш</button>
+</form>
+
+{% if report.error %}
+<div class="panel span2"><p class="muted">{{ report.error }}</p></div>
+{% else %}
+<div style="margin-bottom:10px;">
+  Стоимость: <strong>{{ "{:,.0f}".format(report.total_value_rub) }} ₽</strong>
+  {% if report.regime %}<span class="tag">режим рынка: {{ report.regime }}</span>{% endif %}
+</div>
+
+{# Среднесрочная сводка-аналитика по портфелю (недельный ТФ): агрегатная стойка из позиционных. #}
+{% if stance and stance.positions %}
+{% set pgn = 'up' if stance.score > 0.05 else ('down' if stance.score < -0.05 else 'flat') %}
+<div class="panel span2" style="margin-bottom:14px;">
+  <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
+    <h2 style="margin:0;">Среднесрочная аналитика <span class="muted" style="font-size:12px;">(недельный ТФ)</span></h2>
+    <span>Стойка портфеля: <strong class="{{ pgn }}">{{ stance.posture }}</strong></span>
+    <span class="muted">балл <span class="{{ pgn }}">{{ "%+.2f"|format(stance.score) }}</span>
+      · уверенность {{ (stance.conviction * 100)|round|int }}%</span>
+  </div>
+  <div class="muted" style="margin-top:4px;">
+    Позиции: <span class="up">▲ {{ stance.n_bullish }}</span> ·
+    <span class="flat">■ {{ stance.n_neutral }}</span> ·
+    <span class="down">▼ {{ stance.n_bearish }}</span>
+    {% if stance.trend_1m_pct is not none %} · тренд 1м
+      <span class="{{ 'up' if stance.trend_1m_pct >= 0 else 'down' }}">{{ "%+.1f"|format(stance.trend_1m_pct) }}%</span>{% endif %}
+    {% if stance.trend_3m_pct is not none %} · 3м
+      <span class="{{ 'up' if stance.trend_3m_pct >= 0 else 'down' }}">{{ "%+.1f"|format(stance.trend_3m_pct) }}%</span>{% endif %}
+  </div>
+  {% if stance.leaders_pos or stance.leaders_neg %}
+  <div class="muted" style="font-size:12px; margin-top:4px;">
+    {% if stance.leaders_pos %}Тянут вверх: <span class="up">{{ stance.leaders_pos|join(", ") }}</span>{% endif %}
+    {% if stance.leaders_neg %} · тянут вниз: <span class="down">{{ stance.leaders_neg|join(", ") }}</span>{% endif %}
+  </div>
+  {% endif %}
+  <div class="table-wrap"><table style="width:100%; margin-top:8px; border-collapse:collapse; font-size:13px;">
+    <thead><tr class="muted" style="text-align:left;">
+      <th>Тикер</th><th>Вес</th><th>Сигнал</th><th>Балл</th><th>Главный драйвер</th></tr></thead>
+    <tbody>
+    {% for r in stance.positions %}
+    {% set rsg = 'up' if r.score > 0.05 else ('down' if r.score < -0.05 else 'flat') %}
+    <tr style="border-top:1px solid var(--border);">
+      <td>{{ ui.asset_link(r.ticker) }}</td>
+      <td class="muted">{{ r.weight_pct }}%</td>
+      <td class="{{ rsg }}">{{ r.label }}</td>
+      <td class="{{ rsg }}">{{ "%+.2f"|format(r.score) }}</td>
+      <td class="muted">{{ r.top_driver }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="muted" style="font-size:10px; margin-top:4px;">Образовательная аналитика, не индивидуальная инвестрекомендация.</div>
+</div>
+{% endif %}
+
+{# Стоимость портфеля во времени: фактическая по дневным снимкам, либо реконструкция по
+   риск-серии доходностей (пока снимков < 2 дней). #}
+{% if value_chart %}
+<div class="panel span2">
+  <h2>Стоимость во времени <span class="muted" style="font-size:12px;">({{ value_chart.n }} дн.,
+    {{ 'факт по снимкам' if report.value_series_source == 'snapshots' else 'реконструкция' }})</span></h2>
+  <div class="chart-wrap" style="margin-top:8px;">
+  <svg class="chart" viewBox="0 0 {{ value_chart.width }} {{ value_chart.height }}"
+       preserveAspectRatio="none">
+    <polyline points="{{ value_chart.points }}" style="stroke: var(--{{ 'up' if value_chart.up else 'down' }});"/>
+  </svg>
+  {% if value_chart.xhair %}
+  <div class="xh-vline"></div><div class="xh-hline"></div><div class="xh-dot"></div>
+  <div class="xh-price"></div><div class="xh-ohlc"></div>
+  <script type="application/json" class="xh-data">{{ value_chart.xhair | tojson }}</script>
+  {% endif %}
+  </div>
+  {% if value_chart.labels %}
+  <div style="display:flex; justify-content:space-between; font-size:11px;" class="muted">
+    {% for lb in value_chart.labels %}<span>{{ lb.text }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="metric"><span class="k">диапазон, ₽</span>
+    <span class="v">{{ "{:,.0f}".format(value_chart.min) }} … {{ "{:,.0f}".format(value_chart.max) }}</span></div>
+</div>
+{% endif %}
+
+{# P&L во времени (стоимость − база покупки): только при фактической истории по снимкам. #}
+{% if pnl_chart %}
+<div class="panel span2">
+  <h2>P&amp;L во времени <span class="muted" style="font-size:12px;">({{ pnl_chart.n }} дн.)</span></h2>
+  <div class="chart-wrap" style="margin-top:8px;">
+  <svg class="chart" viewBox="0 0 {{ pnl_chart.width }} {{ pnl_chart.height }}"
+       preserveAspectRatio="none">
+    <polyline points="{{ pnl_chart.points }}" style="stroke: var(--{{ 'up' if pnl_chart.up else 'down' }});"/>
+  </svg>
+  {% if pnl_chart.xhair %}
+  <div class="xh-vline"></div><div class="xh-hline"></div><div class="xh-dot"></div>
+  <div class="xh-price"></div><div class="xh-ohlc"></div>
+  <script type="application/json" class="xh-data">{{ pnl_chart.xhair | tojson }}</script>
+  {% endif %}
+  </div>
+  {% if pnl_chart.labels %}
+  <div style="display:flex; justify-content:space-between; font-size:11px;" class="muted">
+    {% for lb in pnl_chart.labels %}<span>{{ lb.text }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="metric"><span class="k">диапазон P&amp;L, ₽</span>
+    <span class="v">{{ "{:,.0f}".format(pnl_chart.min) }} … {{ "{:,.0f}".format(pnl_chart.max) }}</span></div>
+</div>
+{% endif %}
+
+<div class="grid" style="margin-top:18px;">
+  {# Аллокация по секторам — кольцевая диаграмма + легенда. #}
+  {% if alloc_pie %}
+  <div class="panel">
+    <h2>Аллокация по секторам</h2>
+    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+      <svg viewBox="0 0 {{ alloc_pie.size }} {{ alloc_pie.size }}" width="200" height="200">
+        {% for s in alloc_pie.slices %}
+        <path d="{{ s.d }}" fill="{{ s.color }}"><title>{{ s.label }} — {{ s.pct }}%</title></path>
+        {% endfor %}
+      </svg>
+      <div style="font-size:13px;">
+        {% for s in alloc_pie.slices %}
+        <div class="metric"><span class="k"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ s.color }};margin-right:6px;"></span>{{ s.label }}</span>
+          <span class="v">{{ s.pct }}%</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Аллокация по ПОЗИЦИЯМ — treemap (площадь ∝ вес): нагляднее на многих холдингах. #}
+  {% if alloc_treemap %}
+  <div class="panel">
+    <h2>Аллокация по позициям</h2>
+    <svg viewBox="0 0 {{ alloc_treemap.width }} {{ alloc_treemap.height }}"
+         width="100%" style="display:block;width:100%;height:auto;margin-top:8px;">
+      {% for r in alloc_treemap.rects %}
+      <g>
+        <rect x="{{ r.x }}" y="{{ r.y }}" width="{{ r.w }}" height="{{ r.h }}" rx="3"
+              fill="{{ r.color }}"><title>{{ r.label }} — {{ r.pct }}%</title></rect>
+        {% if r.w > 60 and r.h > 34 %}
+        <text x="{{ r.x + 8 }}" y="{{ r.y + 24 }}" fill="#0b1220" font-size="16"
+              font-weight="700">{{ r.label }}</text>
+        <text x="{{ r.x + 8 }}" y="{{ r.y + 44 }}" fill="#0b1220" font-size="13">{{ r.pct }}%</text>
+        {% endif %}
+      </g>
+      {% endfor %}
+    </svg>
+  </div>
+  {% endif %}
+
+  {# Вклад каждой позиции в риск портфеля (Σ≈100%). #}
+  {% if risk_rows %}
+  <div class="panel">
+    <h2>Вклад в риск <span class="muted" style="font-size:12px;">(доля дисперсии)</span></h2>
+    {% for p in risk_rows %}
+    <div style="margin-bottom:6px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span>{{ ui.asset_link(p.ticker) }}</span><span class="num">{{ "%.1f"|format(p.risk_contribution_pct) }}%</span>
+      </div>
+      <div style="background:var(--panel-2,#1c2733); border-radius:3px; height:8px; overflow:hidden;">
+        <div style="height:8px; width:{{ "%.1f"|format((p.risk_contribution_pct / risk_max * 100) if risk_max > 0 else 0) }}%;
+                    background:var(--{{ 'down' if p.risk_contribution_pct >= 0 else 'up' }});"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel span2 mt3">
+  <h2>Позиции</h2>
+  <div class="table-wrap"><table>
+    <thead><tr>
+      <th>Тикер</th><th class="num">Кол-во</th><th class="num">Цена</th>
+      <th class="num">Стоимость, ₽</th><th class="num">Вес</th><th class="num">P&amp;L</th>
+      <th class="num">β рынок</th><th class="num">Давл. 7д</th><th class="num">Сент. EMA</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for p in report.positions %}
+    <tr>
+      <td>{{ ui.asset_link(p.ticker) }}{% if p.sector %} <span class="muted" style="font-size:11px;">{{ p.sector }}</span>{% endif %}{% if p.note %} <span class="muted" style="font-size:11px;">({{ p.note }})</span>{% endif %}</td>
+      <td class="num">{{ "%g"|format(p.quantity) }}</td>
+      <td class="num">{{ "%.2f"|format(p.last_close) if p.last_close is not none else "—" }}</td>
+      <td class="num">{{ "{:,.0f}".format(p.value_rub) if p.value_rub is not none else "—" }}</td>
+      <td class="num">{{ "%.1f"|format(p.weight_pct) ~ "%" if p.weight_pct is not none else "—" }}</td>
+      <td class="num {{ 'up' if (p.pnl_pct or 0) >= 0 else 'down' }}">{{ "%+.1f"|format(p.pnl_pct) ~ "%" if p.pnl_pct is not none else "—" }}</td>
+      <td class="num">{{ "%+.2f"|format(p.betas['market']) if 'market' in p.betas else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(p.pressure) }}</td>
+      <td class="num">{{ "%+.3f"|format(p.momentum) if p.momentum is not none else "—" }}</td>
+      {% if p.sector == "Кэш" %}
+      <td><form hx-post="/ui/portfolio/cash" hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML" style="margin:0;">
+        <input type="hidden" name="currency" value="{{ p.ticker }}">
+        <input type="hidden" name="amount" value="0">
+        <button type="submit" title="Удалить кэш" class="muted" style="border:none;background:none;cursor:pointer;">✕</button>
+      </form></td>
+      {% else %}
+      <td><form hx-post="/ui/portfolio/remove" hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML" style="margin:0;">
+        <input type="hidden" name="ticker" value="{{ p.ticker }}">
+        <button type="submit" title="Удалить позицию" class="muted" style="border:none;background:none;cursor:pointer;">✕</button>
+      </form></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="grid" style="margin-top:18px;">
+  <div class="panel">
+    <h2>Риск <span class="muted" style="font-size:12px;">(окно {{ report.n_obs }} дн.)</span></h2>
+    {% if report.daily_vol_pct is not none %}
+    <div class="metric"><span class="k">Дневная волатильность</span><span class="v">{{ "%.2f"|format(report.daily_vol_pct) }}%</span></div>
+    {% endif %}
+    {% if report.var95_1d_pct is not none %}
+    <div class="metric"><span class="k">VaR 95% (1д)</span><span class="v">{{ "%.2f"|format(report.var95_1d_pct) }}% ({{ "{:,.0f}".format(report.var95_1d_rub) }} ₽)</span></div>
+    {% endif %}
+    {% if report.var99_1d_pct is not none %}
+    <div class="metric"><span class="k">VaR 99% (1д), ориентир.</span><span class="v">{{ "%.2f"|format(report.var99_1d_pct) }}%</span></div>
+    {% endif %}
+    {% if report.max_drawdown_pct is not none %}
+    <div class="metric"><span class="k">Max просадка (окно)</span><span class="v">{{ "%.2f"|format(report.max_drawdown_pct) }}%</span></div>
+    {% endif %}
+    {% if report.daily_vol_pct is none %}
+    <p class="muted">Мало общей истории для риск-метрик.</p>
+    {% endif %}
+  </div>
+
+  {% if exposure %}
+  <div class="panel">
+    <h2>Факторная экспозиция <span class="muted" style="font-size:12px;">(Σ вес·β{% if report.avg_r2 is not none %}, ср. R²={{ "%.2f"|format(report.avg_r2) }}{% endif %})</span></h2>
+    {% for factor, beta in exposure %}
+    <div class="metric"><span class="k">{{ factor }}</span><span class="v {{ 'up' if beta >= 0 else 'down' }}">{{ "%+.3f"|format(beta) }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if correlations %}
+<div class="panel span2" style="margin-top:18px;">
+  <h2>Корреляции холдингов</h2>
+  {% for c in correlations %}
+  <div class="metric"><span class="k">{{ c.pair }}</span>
+    <span class="v {{ 'up' if c.r >= 0 else 'down' }}">{{ "%+.2f"|format(c.r) }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+</div>
+{% endblock %}

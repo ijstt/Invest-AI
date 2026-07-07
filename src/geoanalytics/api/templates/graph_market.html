@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Граф рынка — geoanalytics{% endblock %}
+{% block content %}
+<h1>Граф рынка (IMOEX)</h1>
+<p class="muted">Дерево «индекс → секторы → активы → важные события». Размер узла актива — новостное
+давление (7 дней), размер события — сила влияния; активы кликабельны (свой граф); наведение —
+подробности. Колесо мыши — масштаб, перетаскивание ЛКМ — сдвиг.
+Граф обновляется автоматически каждые 60 с. <a href="/ui/graph">← граф отдельного актива</a></p>
+
+<div id="graph-host" hx-get="/ui/partials/graph/market"
+     hx-trigger="every 60s" hx-swap="innerHTML">
+  {% include "_graph_svg.html" %}
+</div>
+
+{# Карта рынка под графом: секторы/активы, площадь ∝ объём торгов, цвет ∝ дневное изменение. #}
+<div class="panel span2" style="margin-top:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
+    <h2 style="margin:0;">Карта рынка</h2>
+    <span class="muted" style="font-size:12px;">площадь — объём торгов за день, цвет —
+      изменение цены (<span style="color:var(--up)">рост</span> /
+      <span style="color:var(--down)">падение</span>); группировка по секторам</span>
+  </div>
+  <div id="heatmap-host" hx-get="/ui/partials/graph/heatmap"
+       hx-trigger="load, every 60s" hx-swap="innerHTML" style="margin-top:10px;">
+    <p class="muted">Загрузка карты рынка…</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Состояние zoom/pan в замыкании страницы (скрипт не свапается) → переживает авто-обновление.
+  const state = { k: 1, tx: 0, ty: 0 };
+  function bind() {
+    const svg = document.getElementById('graph-svg');
+    const g = document.getElementById('graph-zoom');
+    if (!svg || !g || svg.dataset.bound) return;
+    svg.dataset.bound = '1';
+    const apply = () => g.setAttribute('transform',
+      `translate(${state.tx} ${state.ty}) scale(${state.k})`);
+    apply();
+    const vbUnits = (e) => {
+      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+      return [vb.x + (e.clientX - r.left) / r.width * vb.width,
+              vb.y + (e.clientY - r.top) / r.height * vb.height];
+    };
+    let drag = false, px = 0, py = 0;
+    svg.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const [mx, my] = vbUnits(e);
+      const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const nk = Math.min(Math.max(state.k * f, 0.3), 6);
+      state.tx = mx - (mx - state.tx) * (nk / state.k);
+      state.ty = my - (my - state.ty) * (nk / state.k);
+      state.k = nk; apply();
+    }, { passive: false });
+    svg.addEventListener('pointerdown', (e) => {
+      drag = true; px = e.clientX; py = e.clientY;
+      svg.style.cursor = 'grabbing'; svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+      state.tx += (e.clientX - px) / r.width * vb.width;
+      state.ty += (e.clientY - py) / r.height * vb.height;
+      px = e.clientX; py = e.clientY; apply();
+    });
+    const end = () => { drag = false; svg.style.cursor = 'grab'; };
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
+  }
+  bind();
+  document.body.addEventListener('htmx:afterSettle', bind);
+})();
+</script>
+{% endblock %}

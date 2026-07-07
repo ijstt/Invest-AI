@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Трейдер — geoanalytics{% endblock %}
+{% block content %}
+<h1>Трейдер <span class="muted" style="font-size:13px;">(Трек 2 · бумажный счёт {{ account }})</span></h1>
+<p class="muted">Самообучающаяся песочница фьючерсов FORTS: эквити, метрики, портфельный риск (VaR/ES),
+позиции, сделки и дрейф моделей. Наблюдение за созреванием — только чтение, без живых ордеров.</p>
+
+{# Автообновление раз в 60с: контейнер перетягивает фрагмент _track2.html (паттерн новостного фида). #}
+<div id="track2-root" hx-get="/ui/partials/track2" hx-trigger="every 60s" hx-swap="innerHTML">
+  {% include "_track2.html" %}
+</div>
+{% endblock %}

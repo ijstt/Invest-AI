@@ -1,0 +1,51 @@
+# Поднимает хранилище (PostgreSQL + TimescaleDB + pgvector) и локальный LLM (Ollama).
+# Образ timescaledb-ha уже содержит расширения timescaledb и vector.
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    container_name: geo-db
+    # Поднимается сам после перезагрузки машины (docker daemon enabled), пока не
+    # остановлен явно через `docker compose stop`/`geo-ctl.sh down`.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${GEO_DB_USER:-geo}
+      POSTGRES_PASSWORD: ${GEO_DB_PASSWORD:-geo}
+      POSTGRES_DB: ${GEO_DB_NAME:-geoanalytics}
+    ports:
+      - "${GEO_DB_PORT:-5432}:5432"
+    volumes:
+      - geo_db_data:/home/postgres/pgdata/data
+      - ./scripts/db-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GEO_DB_USER:-geo} -d ${GEO_DB_NAME:-geoanalytics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: geo-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      # На 15GB-коробке без GPU 7B и 3B-роутер не должны висеть в RAM одновременно:
+      # один загруженный модель за раз → второй вытесняет первый (а не суммируется).
+      # keep_alive приложение задаёт по-запросно (GEO_LLM_KEEP_ALIVE), это дефолт-страховка.
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "5m"
+    volumes:
+      - geo_ollama:/root/.ollama
+      # GGUF и Modelfile (каталог models/) проброшены внутрь, чтобы выполнить `ollama
+      # create` без копирования. FROM в Modelfile (./*.gguf) резолвится относительно
+      # каталога Modelfile = /import (поэтому и gguf, и Modelfile монтируются в /import).
+      - ./models/qwen2.5-7b-instruct-q4_k_m.gguf:/import/qwen2.5-7b-instruct-q4_k_m.gguf:ro
+      - ./models/Modelfile:/import/Modelfile:ro
+      # Лёгкая модель ask-роутера (B) — экономия RAM (~2 ГБ вместо 5 на каждый вопрос).
+      - ./models/qwen2.5-3b-instruct-q4_k_m.gguf:/import/qwen2.5-3b-instruct-q4_k_m.gguf:ro
+      - ./models/Modelfile-3b:/import/Modelfile-3b:ro
+    # GPU нет — Ollama работает на CPU. Тяжёлые модели тянуть осознанно.
+
+volumes:
+  geo_db_data:
+  geo_ollama:

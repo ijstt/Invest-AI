@@ -1,0 +1,15 @@
+[Unit]
+Description=Xray (split-tunnel SOCKS только для Telegram; MOEX/HF идут напрямую)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartSec=10
+# Локальный SOCKS на 127.0.0.1:10808 — наружу не светит, только для процессов Pi.
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

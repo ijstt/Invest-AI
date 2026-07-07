@@ -1,0 +1,23 @@
+[Unit]
+Description=geoanalytics scheduler на Pi (ингест + NLP-каскад + алерты; Фаза 2)
+# БД локальна на Pi; Ollama/эмбеддер НЕ нужны (классификаторы — rubert-tiny2, эмбеддинги
+# отложены: fastembed не ставим → get_embedder()=None, эмбеддинг авто-пропускается, ноут добивает relink).
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/News
+Environment=PYTHONPATH=/home/pi/News
+EnvironmentFile=/home/pi/News/deploy/pi/geo-alerts.env
+ExecStart=/home/pi/News/.venv/bin/geo run-scheduler
+# Замер каскада: пик RSS 1147 MB (rubert-tiny2 + blanchefort base, без e5). Запас на ингест/батчи.
+MemoryAccounting=yes
+MemoryHigh=2500M
+MemoryMax=3G
+# Если БД ещё не поднялась (после ребута Pi) — падаем и повторяем.
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

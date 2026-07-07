@@ -1,0 +1,115 @@
+{# График актива с переключателями. Корень имеет id=asset-chart; переключатели меняют
+   весь блок целиком (hx-swap=outerHTML), поэтому подсветка активной кнопки обновляется. #}
+{# Общий хвост запроса: текущие значения всех параметров (флаги индикаторов 0/1). #}
+{% set q = 'ticker=' ~ ticker ~ '&range=' ~ chart_range ~ '&period=' ~ chart_period ~
+   '&kind=' ~ chart_kind ~ '&ovl=' ~ chart_ovl ~ '&vol=' ~ chart_vol ~ '&osc=' ~ chart_osc %}
+
+{# Переключатель диапазона/периода/типа: меняет один параметр, остальные несёт как есть. #}
+{% macro ctl(label, p, val) %}
+<a href="#" class="tag" style="{{ 'background:var(--accent);color:#04121f;' if (
+     (p=='range' and chart_range==val) or (p=='period' and chart_period==val) or
+     (p=='kind' and chart_kind==val)) }}"
+   hx-get="/ui/partials/asset/chart?ticker={{ ticker }}&range={{ val if p=='range' else chart_range }}&period={{ val if p=='period' else chart_period }}&kind={{ val if p=='kind' else chart_kind }}&ovl={{ chart_ovl }}&vol={{ chart_vol }}&osc={{ chart_osc }}"
+   hx-target="#asset-chart" hx-swap="outerHTML">{{ label }}</a>
+{% endmacro %}
+
+{# Тумблер индикатора: флипает свой флаг (0↔1), подсвечен когда включён. #}
+{% macro tgl(label, name, cur) %}
+<a href="#" class="tag" style="{{ 'background:var(--accent);color:#04121f;' if cur==1 else 'opacity:0.55;' }}"
+   hx-get="/ui/partials/asset/chart?{{ q }}&{{ name }}={{ 0 if cur==1 else 1 }}"
+   hx-target="#asset-chart" hx-swap="outerHTML">{{ label }}</a>
+{% endmacro %}
+
+<div id="asset-chart" class="panel span2" style="margin:14px 0;">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <h2 style="margin:0;">Цена{% if chart %} ({{ chart.n }} баров){% endif %}</h2>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      {{ ctl('1М','range','1m') }}{{ ctl('3М','range','3m') }}{{ ctl('6М','range','6m') }}{{ ctl('1Г','range','1y') }}{{ ctl('Всё','range','max') }}
+      <span class="muted">·</span>
+      {{ ctl('Д','period','D') }}{{ ctl('Н','period','W') }}{{ ctl('М','period','M') }}
+      <span class="muted">·</span>
+      {{ ctl('Линия','kind','line') }}{{ ctl('Свечи','kind','candles') }}
+      <span class="muted">·</span>
+      {{ tgl('SMA/Bands','ovl',chart_ovl) }}{{ tgl('Объём','vol',chart_vol) }}{{ tgl('RSI','osc',chart_osc) }}
+    </div>
+  </div>
+
+  {% if not chart %}
+  <p class="muted" style="margin-top:10px;">Недостаточно данных для графика.</p>
+  {% else %}
+  <div class="chart-wrap" style="margin-top:10px;">
+  <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+       preserveAspectRatio="none">
+    {% if chart.points %}
+    <polyline points="{{ chart.points }}" style="stroke: var(--{{ 'up' if chart.up else 'down' }});"/>
+    {% elif chart.candles %}
+    {% for c in chart.candles %}
+    <line x1="{{ c.cx }}" y1="{{ c.wick_top }}" x2="{{ c.cx }}" y2="{{ c.wick_bot }}"
+          stroke="var(--{{ 'up' if c.up else 'down' }})" stroke-width="1"/>
+    <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"
+          fill="var(--{{ 'up' if c.up else 'down' }})"/>
+    {% endfor %}
+    {% endif %}
+    {# Оверлеи C1: SMA и полосы Bollinger поверх цены. #}
+    {% for ov in chart.overlays %}
+    <polyline points="{{ ov.points }}" fill="none" stroke="{{ ov.css }}" stroke-width="1"
+              {% if ov.dash %}stroke-dasharray="{{ ov.dash }}"{% endif %}/>
+    {% endfor %}
+    {# #5: маркеры событий влияния (цвет — направление, размер — сила; tooltip — заголовок). #}
+    {% for m in chart.markers %}
+    <circle cx="{{ m.x }}" cy="{{ m.y }}" r="{{ m.r }}" fill="var(--{{ m.css }})"
+            fill-opacity="0.8" stroke="var(--bg)" stroke-width="0.6"><title>{{ m.title }}</title></circle>
+    {% endfor %}
+  </svg>
+  {% if chart.xhair %}
+  <div class="xh-vline"></div><div class="xh-hline"></div><div class="xh-dot"></div>
+  <div class="xh-price"></div><div class="xh-ohlc"></div>
+  <script type="application/json" class="xh-data">{{ chart.xhair | tojson }}</script>
+  {% endif %}
+  </div>
+  {% if chart.overlays %}
+  <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:11px; margin-top:4px;" class="muted">
+    {% for ov in chart.overlays %}
+    <span><svg width="16" height="6" style="vertical-align:middle;"><line x1="0" y1="3" x2="16" y2="3"
+      stroke="{{ ov.css }}" stroke-width="2" {% if ov.dash %}stroke-dasharray="{{ ov.dash }}"{% endif %}/></svg>
+      {{ ov.name }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if chart.markers %}
+  <div style="font-size:11px; margin-top:2px;" class="muted">
+    ● события влияния (цвет — направление, размер — сила; наведите для заголовка)
+  </div>
+  {% endif %}
+  {% if chart.labels %}
+  <div style="display:flex; justify-content:space-between; font-size:11px;" class="muted">
+    {% for lb in chart.labels %}<span>{{ lb.text }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="metric"><span class="k">диапазон</span>
+    <span class="v">{{ chart.min }} … {{ chart.max }} · последняя <b>{{ chart.last }}</b></span></div>
+
+  {# C2: сабпанель объёма — столбики, цвет по направлению дня. #}
+  {% if volpanel %}
+  <div class="muted" style="font-size:11px; margin-top:6px;">Объём</div>
+  <svg class="chart" viewBox="0 0 {{ volpanel.width }} {{ volpanel.height }}" preserveAspectRatio="none">
+    {% for b in volpanel.bars %}
+    <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+          fill="var(--{{ 'up' if b.up else 'down' }})" opacity="0.65"/>
+    {% endfor %}
+  </svg>
+  {% endif %}
+
+  {# C3: сабпанель осциллятора RSI с уровнями 30/70. #}
+  {% if oscpanel %}
+  <div class="muted" style="font-size:11px; margin-top:6px;">RSI(14){% if oscpanel.last is not none %} · {{ oscpanel.last }}{% endif %}</div>
+  <svg class="chart" viewBox="0 0 {{ oscpanel.width }} {{ oscpanel.height }}" preserveAspectRatio="none">
+    <line x1="0" y1="{{ oscpanel.high_y }}" x2="{{ oscpanel.width }}" y2="{{ oscpanel.high_y }}"
+          stroke="var(--down)" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.6"/>
+    <line x1="0" y1="{{ oscpanel.low_y }}" x2="{{ oscpanel.width }}" y2="{{ oscpanel.low_y }}"
+          stroke="var(--up)" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.6"/>
+    <polyline points="{{ oscpanel.points }}" fill="none" stroke="var(--accent)" stroke-width="1"/>
+  </svg>
+  {% endif %}
+  {% endif %}
+</div>

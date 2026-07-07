@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Окружение и секреты
+.env
+.env.local
+
+# Данные и кэш моделей
+data/
+!data/.gitkeep
+*.sqlite
+*.duckdb
+*.gguf                 # веса локального LLM (qwen2.5-7b ~4.6 ГБ) — не в репозиторий
+
+# IDE
+.idea/
+.vscode/
+
+# Логи
+*.log
+
+# Инструкции и файлы Claude
+.claude/
+prompt.txt
+tg.txt
+claude_wakeup.log
+wake_up.sh
+
+# Graphify кэш и артефакты
+graphify-out/
+
+# Тикеры (конфигурация пользователя)
+tickers.txt
+
+# Модели GGUF (скачиваются отдельно)
+models/*.gguf
+models/Modelfile*
+
+# Датасеты и кэши (скачиваются/генерируются отдельно)
+data/*.jsonl
+data/*.session
+data/adapters/
+data/fastembed_cache/
+data/futrader/
+data/library/
+data/eval/

@@ -1,0 +1,69 @@
+{% import "_macros.html" as ui %}
+{% if error %}
+<div class="panel span2"><p class="down">{{ error }}</p></div>
+{% elif result.bars < 2 %}
+<div class="panel span2"><p class="muted">
+  Недостаточно истории для {{ ticker }}. Загрузите: <code>geo backfill -t {{ ticker }}</code></p></div>
+{% else %}
+{% set edge = result.total_return_pct - result.buy_hold_return_pct %}
+<h1 style="margin-bottom:2px;">{{ ui.asset_link(ticker) }} <span class="muted">· {{ strategy }}</span></h1>
+<div class="big {{ 'up' if result.total_return_pct >= 0 else 'down' }}">
+  {{ "%+.2f"|format(result.total_return_pct) }}%
+</div>
+<p class="muted">за {{ result.bars }} баров · buy &amp; hold {{ "%+.2f"|format(result.buy_hold_return_pct) }}% ·
+  преимущество <span class="{{ 'up' if edge >= 0 else 'down' }}">{{ "%+.2f"|format(edge) }}%</span>
+  {% if result.alpha_pct is not none %}· alpha к IMOEX
+  <span class="{{ 'up' if result.alpha_pct >= 0 else 'down' }}">{{ "%+.2f"|format(result.alpha_pct) }}%</span>{% endif %}</p>
+
+{% if equity %}
+<div class="panel span2" style="margin:14px 0;">
+  <h2>Кривая капитала</h2>
+  <svg class="chart" viewBox="0 0 {{ equity.width }} {{ equity.height }}" preserveAspectRatio="none">
+    {# Заливка просадки: область между бегущим пиком и кривой. #}
+    <polygon points="{{ equity.dd_fill }}" fill="var(--down)" opacity="0.15" stroke="none"/>
+    <polyline points="{{ equity.points }}" style="stroke: var(--{{ 'up' if equity.up else 'down' }});"/>
+    {# Маркеры сделок: вход (buy) — зелёный, выход (sell) — красный. #}
+    {% for m in equity.markers %}
+    <circle cx="{{ m.x }}" cy="{{ m.y }}" r="2.5" fill="var(--{{ 'up' if m.kind == 'buy' else 'down' }})"/>
+    {% endfor %}
+  </svg>
+  <div class="muted" style="font-size:11px; margin-top:4px;">
+    <svg width="10" height="10" style="vertical-align:middle;"><circle cx="5" cy="5" r="2.5" fill="var(--up)"/></svg> вход ·
+    <svg width="10" height="10" style="vertical-align:middle;"><circle cx="5" cy="5" r="2.5" fill="var(--down)"/></svg> выход ·
+    <span style="background:var(--down);opacity:0.15;padding:0 6px;">&nbsp;</span> просадка
+  </div>
+</div>
+{% endif %}
+
+<div class="grid">
+  <div class="panel">
+    <h2>Метрики</h2>
+    <div class="metric"><span class="k">CAGR</span><span class="v">
+      {{ "%+.2f%%"|format(result.cagr_pct) if result.cagr_pct is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Шарп</span><span class="v">
+      {{ "%.2f"|format(result.sharpe) if result.sharpe is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Сортино</span><span class="v">
+      {{ "%.2f"|format(result.sortino) if result.sortino is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Кальмар</span><span class="v">
+      {{ "%.2f"|format(result.calmar) if result.calmar is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Макс. просадка</span>
+      <span class="v down">−{{ "%.2f"|format(result.max_drawdown_pct) }}%</span></div>
+    <div class="metric"><span class="k">Индекс IMOEX (B&amp;H)</span><span class="v">
+      {{ "%+.2f%%"|format(result.index_return_pct) if result.index_return_pct is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Alpha к индексу</span><span class="v {{ 'up' if (result.alpha_pct or 0) >= 0 else 'down' }}">
+      {{ "%+.2f%%"|format(result.alpha_pct) if result.alpha_pct is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Экспозиция</span><span class="v">{{ "%.0f"|format(result.exposure * 100) }}%</span></div>
+  </div>
+  <div class="panel">
+    <h2>Сделки</h2>
+    <div class="metric"><span class="k">Всего</span><span class="v">{{ result.num_trades }}</span></div>
+    <div class="metric"><span class="k">Доля прибыльных</span><span class="v">
+      {{ "%.0f%%"|format(result.hit_rate * 100) if result.hit_rate is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Profit-factor</span><span class="v">
+      {{ "%.2f"|format(result.profit_factor) if result.profit_factor is not none else '—' }}</span></div>
+    <div class="metric"><span class="k">Ср. приб./убыток</span><span class="v">
+      {{ "%+.2f%%"|format(result.avg_win_pct) if result.avg_win_pct is not none else '—' }} /
+      {{ "%+.2f%%"|format(result.avg_loss_pct) if result.avg_loss_pct is not none else '—' }}</span></div>
+  </div>
+</div>
+{% endif %}

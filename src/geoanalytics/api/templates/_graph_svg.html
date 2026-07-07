@@ -1,0 +1,42 @@
+{% if graph %}
+<div class="panel span2">
+  <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:12px; margin-bottom:8px;" class="muted">
+    <span><span style="color:var(--up)">●</span> событие ↑ / <span style="color:var(--down)">●</span> ↓</span>
+    <span><span style="color:var(--gn-sector)">●</span> сектор</span>
+    <span><span style="color:var(--gn-peer)">●</span> пир по сектору</span>
+    <span><span style="color:var(--gn-commodity)">●</span> сырьё</span>
+    <span><span style="color:var(--gn-fx)">●</span> валюта</span>
+    <span><span style="color:var(--gn-macro)">●</span> макро</span>
+  </div>
+  <svg id="graph-svg" viewBox="0 0 {{ graph.width }} {{ graph.height }}"
+       style="width:100%; height:auto; background:var(--panel2); border-radius:10px;
+              cursor:grab; touch-action:none;">
+    <g id="graph-zoom">
+      {% for e in graph.edges %}
+      <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}"
+            stroke="var(--line)" stroke-width="1.5"/>
+      {% endfor %}
+      <circle cx="{{ graph.center.x }}" cy="{{ graph.center.y }}" r="{{ graph.center.r }}"
+              fill="var(--accent)"/>
+      <text x="{{ graph.center.x }}" y="{{ graph.center.y }}" text-anchor="middle"
+            dominant-baseline="central" fill="#04121f" font-weight="700" font-size="13">{{ graph.center.label }}</text>
+      {% for n in graph.nodes %}
+      {% if n.url %}
+      <a href="{{ n.url }}"><circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}"
+         fill="var(--{{ n.css }})" fill-opacity="0.85" stroke="var(--bg)"
+         stroke-width="1"><title>{{ n.title }}</title></circle></a>
+      {% else %}
+      <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}" fill="var(--{{ n.css }})"
+              fill-opacity="0.85" stroke="var(--bg)" stroke-width="1"><title>{{ n.title }}</title></circle>
+      {% endif %}
+      <text x="{{ n.lx }}" y="{{ n.ly }}" text-anchor="{{ n.anchor }}" fill="var(--muted)"
+            font-size="12">{{ n.label }}</text>
+      {% endfor %}
+    </g>
+  </svg>
+</div>
+{% elif ticker %}
+<div class="panel span2 muted">Для {{ ticker }} пока нет данных для графа.</div>
+{% else %}
+<div class="panel span2 muted">Выберите актив, чтобы построить граф влияния.</div>
+{% endif %}

@@ -1,0 +1,37 @@
+{# Панель правил подавления; HTMX-свап по #mutes-panel (outerHTML). #}
+<div id="mutes-panel">
+  <form class="bar" action="/ui/alerts/mute" method="post"
+        hx-post="/ui/alerts/mute" hx-target="#mutes-panel" hx-swap="outerHTML">
+    <select name="scope_type">
+      {% for s in scope_types %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    <input name="scope_value" placeholder="SBER / price_move / SBER:price_move" style="width:280px;" required>
+    <input name="days" type="number" min="0" placeholder="дней (пусто = бессрочно)" style="width:170px;">
+    <input name="reason" placeholder="причина (опц.)">
+    <button type="submit">🔇 Заглушить</button>
+  </form>
+
+  {% if mutes %}
+  <table style="margin-top:10px;">
+    <thead><tr><th>Область</th><th>Значение</th><th>До</th><th>Причина</th><th></th></tr></thead>
+    <tbody>
+      {% for m in mutes %}
+      <tr>
+        <td><span class="tag">{{ m.scope_type }}</span></td>
+        <td>{{ m.scope_value }}</td>
+        <td class="muted">{% if m.until %}{{ m.until[:16]|replace('T', ' ') }}{% else %}бессрочно{% endif %}</td>
+        <td class="muted">{{ m.reason or '—' }}</td>
+        <td class="num">
+          <button type="button" hx-post="/ui/alerts/unmute/{{ m.id }}"
+                  hx-target="#mutes-panel" hx-swap="outerHTML"
+                  style="padding:2px 9px; font-size:12px; background:var(--panel2); color:var(--fg);"
+                  title="снять">✕</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:10px;">Активных правил подавления нет.</p>
+  {% endif %}
+</div>

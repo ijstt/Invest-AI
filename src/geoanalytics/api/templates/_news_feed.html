@@ -1,0 +1,22 @@
+{% import "_macros.html" as ui %}
+{% if headlines %}
+{% for h in headlines %}
+<div class="metric">
+  <span class="k">
+    {% if h.sentiment == 'positive' %}<span class="up">▲</span>
+    {% elif h.sentiment == 'negative' %}<span class="down">▼</span>
+    {% else %}<span class="flat">■</span>{% endif %}
+    {% if h.published_at %}<span class="muted" style="font-variant-numeric:tabular-nums;">{{ h.published_at.strftime('%d.%m %H:%M') }}</span>{% endif %}
+    {% if h.url %}<a href="{{ h.url }}" target="_blank" rel="noopener">{{ h.title }}</a>
+    {% else %}{{ h.title }}{% endif %}
+  </span>
+  <span class="v">
+    {% for t in h.tickers[:4] %}<span class="tag">{{ ui.asset_link(t) }}</span> {% endfor %}
+    <span class="tag">{{ h.event_type or '—' }}</span>
+    {% if h.significance is not none %}<span class="muted" title="значимость">{{ "%.2f"|format(h.significance) }}</span>{% endif %}
+  </span>
+</div>
+{% endfor %}
+{% else %}
+<p class="muted">Нет свежих новостей за {{ hours }} ч.</p>
+{% endif %}
