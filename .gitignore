@@ -25,19 +25,6 @@ data/
 # Логи
 *.log
 
-# Инструкции и файлы Claude
-.claude/
-prompt.txt
-tg.txt
-claude_wakeup.log
-wake_up.sh
-
-# Graphify кэш и артефакты
-graphify-out/
-
-# Тикеры (конфигурация пользователя)
-tickers.txt
-
 # Модели GGUF (скачиваются отдельно)
 models/*.gguf
 models/Modelfile*
