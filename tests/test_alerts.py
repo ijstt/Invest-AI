@@ -399,7 +399,7 @@ def test_mute_market_alert_not_matched_by_ticker_scope():
 
 def test_format_text_has_icon_and_title():
     text = channels.format_text(_alert())
-    assert "🔴" in text and "SBER" in text
+    assert "📈" in text and "SBER" in text
 
 
 def test_dispatch_console_only_when_telegram_unconfigured():
