@@ -1,0 +1,19 @@
+[Unit]
+Description=GeoAnalytics FastAPI Web Server
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/News
+Environment="PATH=/home/pi/News/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/home/pi/News"
+ExecStart=/home/pi/News/.venv/bin/geo serve
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=geoapi
+
+[Install]
+WantedBy=multi-user.target
