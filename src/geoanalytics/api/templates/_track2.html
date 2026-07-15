@@ -4,102 +4,206 @@
 {%- if v is none -%}{{ dash }}{%- else -%}{{ spec|format(v) }}{%- endif -%}
 {%- endmacro -%}
 
-{# Шапка-статус: kill-switch + действующие лимиты. #}
+{# ── Kill-switch banner ── #}
 {% if halt and halt.halted %}
 <div class="panel span2" style="border-color:var(--down); background:rgba(248,81,73,.09); margin-bottom:14px;">
   <strong class="down">⛔ KILL-SWITCH ВЗВЕДЁН</strong> — {{ halt.reason or '—' }}
   <span class="muted">(с {{ halt.updated_at.strftime('%Y-%m-%d %H:%M') }})</span>.
   Новые входы заблокированы (выходы идут). Снять: <code>geo futures-intraday resume</code>.
 </div>
-{% else %}
-<div style="margin-bottom:8px;"><span class="tag" style="color:var(--up);">✓ счёт активен</span></div>
 {% endif %}
-<p class="muted" style="font-size:12px; margin:0 0 14px;">
-  Лимиты: дневной убыток {{ "%.0f"|format(limits.max_daily_loss_pct) }}%, брутто-маржа
-  {{ "%.0f"|format(limits.max_gross_margin_pct) }}%, позиция ≤{{ limits.max_position_per_instrument }},
-  устаревание бара {{ "%.0f"|format(limits.max_bar_staleness_hours) }}ч, скачок цены
-  {{ "%.0f"|format(limits.max_price_jump_pct) }}%.</p>
 
-{% if rec.note %}<div class="panel span2" style="margin-bottom:14px;"><p class="muted">{{ rec.note }}</p></div>{% endif %}
+{# ── Hero Panel: equity + метрики + heat-strip ── #}
+<div class="hero-panel span2">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:24px; flex-wrap:wrap;">
+    {# Левая колонка: цифры #}
+    <div style="flex:1; min-width:200px;">
+      {% set eq_cls = 'up' if rec.equity >= rec.starting_cash else 'down' %}
+      {% if not halt or not halt.halted %}
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span class="tag" style="color:var(--up); border-color:rgba(47,185,141,.3);">✓ активен</span>
+        <span class="muted fs-xs">{{ account }}</span>
+      </div>
+      {% endif %}
+      <div class="hero-equity {{ eq_cls }}">{{ "{:,.0f}".format(rec.equity) }} ₽</div>
+      {% set delta = rec.equity - rec.starting_cash %}
+      <div class="hero-delta {{ eq_cls }}">
+        {{ "{:+,.0f}".format(delta) }} ₽ &nbsp;·&nbsp;
+        {% if metrics.total_return_pct is not none %}
+        {{ "%+.2f"|format(metrics.total_return_pct) }}% от старта
+        {% endif %}
+      </div>
+      <div class="hero-meta">
+        <span>Sharpe<b>{{ m(metrics.sharpe) }}</b></span>
+        <span>Win-rate<b>{% if metrics.win_rate is not none %}{{ "%.0f"|format(metrics.win_rate * 100) }}%{% else %}—{% endif %}</b></span>
+        <span>PF<b>{{ m(metrics.profit_factor) }}</b></span>
+        <span>maxDD<b>{{ m(metrics.max_drawdown_pct, '%.1f') }}%</b></span>
+        <span>Сделок<b>{{ metrics.n_trades }}</b></span>
+      </div>
 
-{# KPI-карточки. #}
-{% set eq_cls = 'up' if rec.equity >= rec.starting_cash else 'down' %}
-<div class="grid">
-  <div class="panel">
-    <h2 style="margin:0;">Эквити</h2>
-    <div class="big {{ eq_cls }}" style="margin:2px 0 4px;">{{ "{:,.0f}".format(rec.equity) }} ₽</div>
-    <div class="metric"><span class="k">старт</span><span class="v">{{ "{:,.0f}".format(rec.starting_cash) }} ₽</span></div>
-    <div class="metric"><span class="k">доходность</span>
-      <span class="v {{ 'up' if (metrics.total_return_pct or 0) >= 0 else 'down' }}">{{ m(metrics.total_return_pct, '%+.2f') }}%</span></div>
-    <div class="metric"><span class="k">снимков</span><span class="v">{{ metrics.n_points }}</span></div>
-  </div>
-  <div class="panel">
-    <h2 style="margin:0;">P&amp;L</h2>
-    <div class="metric"><span class="k">реализованный</span>
-      <span class="v {{ 'up' if rec.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(rec.realized_pnl) }} ₽</span></div>
-    <div class="metric"><span class="k">нереализованный</span>
-      <span class="v {{ 'up' if rec.unrealized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(rec.unrealized_pnl) }} ₽</span></div>
-    <div class="metric"><span class="k">валовая маржа</span><span class="v">{{ "{:,.0f}".format(rec.gross_margin) }} ₽</span></div>
-    <div class="metric"><span class="k">открытых позиций</span><span class="v">{{ rec.open_positions }}</span></div>
-  </div>
-  <div class="panel">
-    <h2 style="margin:0;">Риск-метрики</h2>
-    <div class="metric"><span class="k">текущая просадка</span><span class="v">{{ "%.1f"|format(rec.drawdown_pct) }}%</span></div>
-    <div class="metric"><span class="k">maxDD</span><span class="v">{{ m(metrics.max_drawdown_pct, '%.1f') }}%</span></div>
-    <div class="metric"><span class="k">Sharpe</span><span class="v">{{ m(metrics.sharpe) }}</span></div>
-  </div>
-  <div class="panel">
-    <h2 style="margin:0;">Качество сделок</h2>
-    <div class="metric"><span class="k">сделок</span><span class="v">{{ metrics.n_trades }}</span></div>
-    <div class="metric"><span class="k">win-rate</span>
-      <span class="v">{% if metrics.win_rate is not none %}{{ "%.0f"|format(metrics.win_rate * 100) }}%{% else %}—{% endif %}</span></div>
-    <div class="metric"><span class="k">profit-factor</span><span class="v">{{ m(metrics.profit_factor) }}</span></div>
-    <div class="metric"><span class="k">ср. приб./убыт.</span><span class="v">{{ m(metrics.avg_win, '%+.0f') }} / {{ m(metrics.avg_loss, '%+.0f') }} ₽</span></div>
-  </div>
-</div>
+      {# Лимиты #}
+      <div class="muted fs-xs" style="margin-top:10px;">
+        Лимиты: дн.убыток {{ "%.0f"|format(limits.max_daily_loss_pct) }}%
+        · брутто-маржа {{ "%.0f"|format(limits.max_gross_margin_pct) }}%
+        · поз. ≤{{ limits.max_position_per_instrument }}
+      </div>
+    </div>
 
-{# Кривая эквити (почасовые снимки). #}
-{% if value_chart %}
-<div class="panel span2 mt3">
-  <h2>Эквити во времени <span class="muted" style="font-size:12px;">({{ value_chart.n }} снимков)</span></h2>
-  <div class="chart-wrap" style="margin-top:8px;">
-    <svg class="chart" viewBox="0 0 {{ value_chart.width }} {{ value_chart.height }}" preserveAspectRatio="none">
-      <polyline points="{{ value_chart.points }}" style="stroke: var(--{{ 'up' if value_chart.up else 'down' }});"/>
-    </svg>
-    {% if value_chart.xhair %}
-    <div class="xh-vline"></div><div class="xh-hline"></div><div class="xh-dot"></div>
-    <div class="xh-price"></div><div class="xh-ohlc"></div>
-    <script type="application/json" class="xh-data">{{ value_chart.xhair | tojson }}</script>
+    {# Правая колонка: кривая эквити #}
+    {% if value_chart %}
+    <div style="flex:2; min-width:300px;">
+      <div class="chart-wrap" style="margin:0;">
+        <svg class="chart" viewBox="0 0 {{ value_chart.width }} {{ value_chart.height }}"
+             preserveAspectRatio="none" style="height:120px;">
+          {# gradient fill под кривой #}
+          <defs>
+            <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="{{ 'var(--up)' if value_chart.up else 'var(--down)' }}" stop-opacity=".3"/>
+              <stop offset="100%" stop-color="{{ 'var(--up)' if value_chart.up else 'var(--down)' }}" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          {# Закрашенная область под кривой (polygon: кривая + нижние углы) #}
+          {% if value_chart.points %}
+          <polygon points="{{ value_chart.points }} {{ value_chart.width }},{{ value_chart.height }} 0,{{ value_chart.height }}"
+                   fill="url(#eq-grad)"/>
+          {% endif %}
+          <polyline points="{{ value_chart.points }}"
+                    style="stroke: var(--{{ 'up' if value_chart.up else 'down' }}); fill:none; stroke-width:2;"/>
+        </svg>
+        {% if value_chart.xhair %}
+        <div class="xh-vline"></div><div class="xh-hline"></div><div class="xh-dot"></div>
+        <div class="xh-price"></div><div class="xh-ohlc"></div>
+        <script type="application/json" class="xh-data">{{ value_chart.xhair | tojson }}</script>
+        {% endif %}
+      </div>
+      {% if value_chart.labels %}
+      <div style="display:flex; justify-content:space-between; font-size:10px; margin-top:2px;" class="muted">
+        {% for lb in value_chart.labels %}<span>{{ lb.text }}</span>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
     {% endif %}
   </div>
-  {% if value_chart.labels %}
-  <div style="display:flex; justify-content:space-between; font-size:11px;" class="muted">
-    {% for lb in value_chart.labels %}<span>{{ lb.text }}</span>{% endfor %}
+
+  {# Heat-strip: дневной P&L за 30 дней #}
+  {% if daily_pnl %}
+  <div style="margin-top:16px;">
+    <div class="heat-strip-label">P&amp;L по дням · последние {{ daily_pnl|length }} дн.</div>
+    <div class="heat-strip">
+      {% for d in daily_pnl %}
+      {% set hc = 'hc-zero' if d.pnl == 0 else ('hc-win' if d.pnl > 0 else 'hc-loss') %}
+      <div class="heat-cell {{ hc }}"
+           title="{{ d.date }}: {{ '{:+,.0f}'.format(d.pnl) }} ₽"
+           style="{% if d.pnl > 0 %}opacity: {{ [0.3 + d.pnl / ([daily_pnl | map(attribute='pnl') | max, 1] | max) * 0.7, 1.0] | min }};{% endif %}
+                  {% if d.pnl < 0 %}opacity: {{ [0.3 + (-d.pnl) / ([-( daily_pnl | map(attribute='pnl') | min), 1] | max) * 0.7, 1.0] | min }};{% endif %}">
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
-  <div class="metric"><span class="k">диапазон, ₽</span>
-    <span class="v">{{ "{:,.0f}".format(value_chart.min) }} … {{ "{:,.0f}".format(value_chart.max) }}</span></div>
 </div>
-{% endif %}
 
-<div class="grid" style="margin-top:18px;">
-  {# Портфельный риск фьючерсного бука (VaR/ES + контрибьюторы + корреляции). #}
+{# ── KPI-карточки (терминальный стиль) ── #}
+<div class="grid" style="margin-bottom:20px;">
+
+  {# Эквити/доходность #}
+  <div class="kpi-card">
+    <div class="kpi-label">Эквити</div>
+    <div class="kpi-value {{ 'up' if rec.equity >= rec.starting_cash else 'down' }}">
+      {{ "{:,.0f}".format(rec.equity) }} ₽
+    </div>
+    <div class="kpi-sub">старт {{ "{:,.0f}".format(rec.starting_cash) }} ₽</div>
+    {% if metrics.total_return_pct is not none %}
+    <div class="bar-track">
+      {% set bar_w = [[50 + metrics.total_return_pct * 2, 0] | max, 100] | min %}
+      <div class="bar-fill" style="width:{{ bar_w }}%; background: var(--{{ 'up' if metrics.total_return_pct >= 0 else 'down' }});"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Win-rate с radial-progress #}
+  <div class="kpi-card">
+    <div class="kpi-label">Win-rate</div>
+    <div class="radial-wrap">
+      {% if metrics.win_rate is not none %}
+      {% set wr_pct = (metrics.win_rate * 100) | round | int %}
+      {% set wr_deg = (wr_pct / 100 * 360) | int %}
+      <div class="radial-ring {{ 'ring-up' if metrics.win_rate >= 0.5 else 'ring-down' }}"
+           style="--prog: {{ wr_deg }}deg;">
+        <span>{{ wr_pct }}%</span>
+      </div>
+      <div>
+        <div class="kpi-value {{ 'up' if metrics.win_rate >= 0.5 else 'down' }}" style="font-size:22px;">
+          {{ "%.0f"|format(metrics.win_rate * 100) }}%
+        </div>
+        <div class="kpi-sub">из {{ metrics.n_trades }} сделок</div>
+      </div>
+      {% else %}
+      <div class="kpi-value" style="font-size:22px;">—</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# P&L #}
+  <div class="kpi-card">
+    <div class="kpi-label">P&amp;L реализованный</div>
+    <div class="kpi-value {{ 'up' if rec.realized_pnl >= 0 else 'down' }}">
+      {{ "{:+,.0f}".format(rec.realized_pnl) }} ₽
+    </div>
+    <div class="kpi-sub">нереализованный:
+      <span class="{{ 'up' if rec.unrealized_pnl >= 0 else 'down' }}">
+        {{ "{:+,.0f}".format(rec.unrealized_pnl) }} ₽
+      </span>
+    </div>
+    {% if metrics.avg_win is not none or metrics.avg_loss is not none %}
+    <div class="kpi-sub" style="margin-top:4px;">
+      ср. приб. <span class="up">{{ m(metrics.avg_win, '%+.0f') }} ₽</span>
+      · ср. уб. <span class="down">{{ m(metrics.avg_loss, '%+.0f') }} ₽</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Просадка с "уровнем опасности" #}
+  <div class="kpi-card">
+    <div class="kpi-label">Просадка</div>
+    {% set dd = rec.drawdown_pct %}
+    {% set dd_cls = 'up' if dd < 3 else ('gold' if dd < 8 else 'down') %}
+    <div class="kpi-value {{ 'down' if dd >= 5 else 'flat' if dd >= 2 else 'up' }}">
+      {{ "%.1f"|format(dd) }}%
+    </div>
+    <div class="kpi-sub">max {{ m(metrics.max_drawdown_pct, '%.1f') }}%</div>
+    <div class="bar-track" style="margin-top:8px;">
+      {% set dd_bar = [dd * 5, 100] | min %}
+      <div class="bar-fill" style="width:{{ dd_bar }}%;
+        background: {% if dd < 5 %}var(--up){% elif dd < 10 %}var(--gold){% else %}var(--down){% endif %};"></div>
+    </div>
+    <div class="muted fs-xs" style="margin-top:4px;">
+      {% if dd < 5 %}норма{% elif dd < 10 %}умеренно{% else %}⚠ высокая{% endif %}
+    </div>
+  </div>
+</div>
+
+{# Profit Factor #}
+{% if rec.note %}<div class="panel span2 mb2"><p class="muted">{{ rec.note }}</p></div>{% endif %}
+
+{# ── Атрибуция P&L + Риск ── #}
+<div class="grid" style="margin-bottom:20px;">
   {% if risk is not none and risk.n_instruments %}
   <div class="panel">
-    <h2>Портфельный риск <span class="muted" style="font-size:12px;">({{ risk.n_instruments }} инстр.)</span></h2>
+    <h2 style="margin:0;">Портфельный риск <span class="muted fs-xs">({{ risk.n_instruments }} инстр.)</span></h2>
     <div class="metric"><span class="k">VaR&nbsp;95</span><span class="v">{{ m(risk.var_pct) }}%</span></div>
     <div class="metric"><span class="k">ES&nbsp;95 (CVaR)</span><span class="v">{{ m(risk.es_pct) }}%</span></div>
     <div class="metric"><span class="k">брутто-экспозиция</span><span class="v">{{ "{:,.0f}".format(risk.gross_exposure) }} ₽</span></div>
     <div class="metric"><span class="k">нетто-экспозиция</span><span class="v">{{ "{:+,.0f}".format(risk.net_exposure) }} ₽</span></div>
     {% if risk.contributions %}
-    <div style="margin-top:8px;"><span class="muted" style="font-size:12px;">риск-контрибьюторы</span>
+    <div style="margin-top:8px;"><span class="muted fs-xs">риск-контрибьюторы</span>
       {% for k, v in risk.contributions.items() | sort(attribute=1, reverse=true) %}
       <div class="metric"><span class="k">{{ k }}</span><span class="v">{{ "%+.0f"|format(v) }}%</span></div>
       {% endfor %}
     </div>
     {% endif %}
     {% if risk.top_correlations %}
-    <div style="margin-top:6px;"><span class="muted" style="font-size:12px;">топ-корреляции</span>
+    <div style="margin-top:6px;"><span class="muted fs-xs">топ-корреляции</span>
       {% for pair, v in risk.top_correlations %}
       <div class="metric"><span class="k">{{ pair }}</span><span class="v">{{ "%+.2f"|format(v) }}</span></div>
       {% endfor %}
@@ -108,34 +212,36 @@
   </div>
   {% endif %}
 
-  {# Атрибуция P&L по стратегиям. #}
   {% if by_strategy %}
   <div class="panel">
-    <h2>P&amp;L по стратегиям</h2>
+    <h2 style="margin:0;">P&amp;L по стратегиям</h2>
     {% for r in by_strategy %}
-    <div style="margin-bottom:6px;">
+    <div style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; font-size:13px;">
-        <span>{{ r.label }}</span><span class="num {{ 'up' if r.pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(r.pnl) }} ₽</span>
+        <span>{{ r.label }}</span>
+        <span class="num {{ 'up' if r.pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(r.pnl) }} ₽</span>
       </div>
-      <div style="background:#1c2733; border-radius:3px; height:8px; overflow:hidden;">
-        <div style="height:8px; width:{{ "%.1f"|format(r.pct) }}%; background:var(--{{ 'up' if r.pnl >= 0 else 'down' }});"></div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:{{ "%.1f"|format(r.pct) }}%;
+             background: var(--{{ 'up' if r.pnl >= 0 else 'down' }});"></div>
       </div>
     </div>
     {% endfor %}
   </div>
   {% endif %}
 
-  {# Атрибуция P&L по инструментам. #}
   {% if by_instrument %}
   <div class="panel">
-    <h2>P&amp;L по инструментам</h2>
+    <h2 style="margin:0;">P&amp;L по инструментам</h2>
     {% for r in by_instrument %}
-    <div style="margin-bottom:6px;">
+    <div style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; font-size:13px;">
-        <span>{{ r.label }}</span><span class="num {{ 'up' if r.pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(r.pnl) }} ₽</span>
+        <span>{{ r.label }}</span>
+        <span class="num {{ 'up' if r.pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(r.pnl) }} ₽</span>
       </div>
-      <div style="background:#1c2733; border-radius:3px; height:8px; overflow:hidden;">
-        <div style="height:8px; width:{{ "%.1f"|format(r.pct) }}%; background:var(--{{ 'up' if r.pnl >= 0 else 'down' }});"></div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:{{ "%.1f"|format(r.pct) }}%;
+             background: var(--{{ 'up' if r.pnl >= 0 else 'down' }});"></div>
       </div>
     </div>
     {% endfor %}
@@ -143,23 +249,41 @@
   {% endif %}
 </div>
 
-{# Открытые позиции. #}
+{# ── Открытые позиции ── #}
 <div class="panel span2 mt3">
-  <h2>Открытые позиции</h2>
+  <h2>Открытые позиции <span class="muted fs-xs">({{ positions | length }})</span></h2>
   {% if positions %}
   <div class="table-wrap"><table>
     <thead><tr>
-      <th>Инстр.</th><th>Инт.</th><th>Стратегия</th><th class="num">Qty</th>
-      <th class="num">Сред.</th><th class="num">Послед.</th><th class="num">Реализ. P&amp;L</th>
+      <th>Инстр.</th><th>Инт.</th><th>Стратегия</th><th class="num">Dir</th><th class="num">Qty</th>
+      <th class="num">Средняя</th><th class="num">Последняя</th>
+      <th class="num">Нереал.%</th><th class="num">Реализ. P&amp;L</th>
+      <th>Держим</th>
     </tr></thead>
     <tbody>
       {% for p in positions %}
       <tr>
-        <td>{{ p.asset_code }}</td><td>{{ p.interval }}</td><td>{{ p.source }}</td>
+        <td><strong>{{ p.asset_code }}</strong></td>
+        <td class="muted">{{ p.interval }}</td>
+        <td class="muted">{{ p.source }}</td>
+        <td class="num" style="font-size:16px;">{{ '▲' if p.net_qty > 0 else '▼' }}</td>
         <td class="num {{ 'up' if p.net_qty >= 0 else 'down' }}">{{ "%+d"|format(p.net_qty) }}</td>
         <td class="num">{{ "%.2f"|format(p.avg_price) if p.avg_price is not none else "—" }}</td>
         <td class="num">{{ "%.2f"|format(p.last_price) if p.last_price is not none else "—" }}</td>
+        <td class="num {{ 'up' if (p.unreal_pct or 0) >= 0 else 'down' }}">
+          {% if p.unreal_pct is not none %}{{ "%+.2f"|format(p.unreal_pct) }}%{% else %}—{% endif %}
+        </td>
         <td class="num {{ 'up' if p.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(p.realized_pnl) }}</td>
+        <td>
+          {% if p.duration_bars is not none %}
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div class="hold-bar-wrap">
+              <div class="hold-bar-fill" style="width:{{ [p.duration_bars / 12 * 100, 100] | min }}%;"></div>
+            </div>
+            <span class="muted fs-xs">{{ p.duration_bars }}h</span>
+          </div>
+          {% else %}—{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -167,26 +291,61 @@
   {% else %}<p class="muted">Нет открытых позиций.</p>{% endif %}
 </div>
 
-{# Последние сделки. #}
+{# ── Последние сделки с вкладками по стратегиям ── #}
 <div class="panel span2 mt3">
-  <h2>Последние сделки</h2>
+  <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+    <h2 style="margin:0;">Последние сделки</h2>
+    <span class="muted fs-xs">топ-15 из последних 50</span>
+  </div>
+
+  {# Вкладки фильтрации по стратегии #}
+  {% set all_sources = trades | map(attribute='source') | unique | list %}
+  {% if all_sources | length > 1 %}
+  <div class="tab-bar" id="trades-tabs">
+    <button class="tab-btn active" onclick="filterTrades(this, '')" id="tab-all">Все</button>
+    {% for src in all_sources %}
+    <button class="tab-btn" onclick="filterTrades(this, '{{ src }}')" id="tab-{{ src | replace(' ', '-') }}">
+      {{ src }}
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if trades %}
-  <div class="table-wrap"><table>
+  <div class="table-wrap"><table id="trades-table">
     <thead><tr>
-      <th>Время</th><th>Инстр.</th><th>Стратегия</th><th>Действ.</th><th class="num">Qty</th>
-      <th class="num">Цена</th><th class="num">P(win)</th><th class="num">Conv.</th><th class="num">P&amp;L</th><th>Причина</th>
+      <th>Время</th><th>Инстр.</th><th>Стратегия</th><th>Действие</th>
+      <th class="num">Qty</th><th class="num">Цена</th>
+      <th class="num">P(win)</th><th class="num">Conv.</th>
+      <th class="num">P&amp;L</th><th>Причина</th>
     </tr></thead>
     <tbody>
       {% for t in trades %}
-      <tr>
-        <td>{{ t.ts.strftime('%m-%d %H:%M') }}</td><td>{{ t.asset_code }}</td><td>{{ t.source }}</td>
+      {% set reason = t.reason or '' %}
+      {% set row_cls = 'trade-row--stop' if 'stop' in reason
+                       else 'trade-row--take' if 'take' in reason or 'profit' in reason
+                       else 'trade-row--time' if 'time' in reason or 'session' in reason
+                       else '' %}
+      {% set badge_cls = 'exit-badge--stop' if 'stop' in reason
+                         else 'exit-badge--take' if 'take' in reason or 'profit' in reason
+                         else 'exit-badge--time' if 'time' in reason or 'session' in reason
+                         else 'exit-badge--entry' if reason == 'entry'
+                         else 'exit-badge--other' %}
+      <tr class="{{ row_cls }}" data-source="{{ t.source }}">
+        <td class="muted fs-xs">{{ t.ts.strftime('%m-%d %H:%M') }}</td>
+        <td><strong>{{ t.asset_code }}</strong></td>
+        <td class="muted">{{ t.source }}</td>
         <td>{{ t.action }}</td>
         <td class="num {{ 'up' if t.signed_qty >= 0 else 'down' }}">{{ "%+d"|format(t.signed_qty) }}</td>
         <td class="num">{{ "%.2f"|format(t.price) }}</td>
         <td class="num">{{ "%.2f"|format(t.p_win) if t.p_win is not none else "—" }}</td>
         <td class="num">{{ "%.0f%%"|format(t.conviction * 100) if t.conviction is not none else "—" }}</td>
-        <td class="num {{ ('up' if t.realized_pnl >= 0 else 'down') if t.realized_pnl is not none else '' }}">{{ "{:+,.0f}".format(t.realized_pnl) if t.realized_pnl is not none else "—" }}</td>
-        <td class="muted">{{ t.reason or "—" }}</td>
+        <td class="num {{ ('up' if t.realized_pnl >= 0 else 'down') if t.realized_pnl is not none else '' }}">
+          {{ "{:+,.0f}".format(t.realized_pnl) if t.realized_pnl is not none else "—" }}
+        </td>
+        <td>
+          <span class="exit-badge {{ badge_cls }}">{{ reason or '—' }}</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -194,9 +353,39 @@
   {% else %}<p class="muted">Сделок пока нет.</p>{% endif %}
 </div>
 
-{# Дрейф чемпионов (наблюдатель — авто-действий тут нет, halt только в петле scheduler). #}
+{# ── Анализ выходов (диагностика) ── #}
+{% if exit_diag %}
 <div class="panel span2 mt3">
-  <h2>Дрейф моделей <span class="muted" style="font-size:12px;">(PSI входов · калибровка · decay по бумажным исходам)</span></h2>
+  <h2>Анализ выходов <span class="muted fs-xs">(последние 50 операций)</span></h2>
+  <div class="exit-diag">
+    {% for d in exit_diag %}
+    {% set val_cls = 'down' if d.reason in ('stop_loss',) else 'up' if d.reason == 'take_profit' else 'flat' if d.reason == 'time_stop' else 'muted' %}
+    <div class="exit-diag-item">
+      <div class="ed-val {{ val_cls }}">{{ d.count }}</div>
+      <div class="ed-lbl">{{ d.reason }}</div>
+      <div class="ed-sub">
+        {{ d.pct }}% всех операций
+        {% if d.avg_pnl is not none %}
+        · ср. P&L: <span class="{{ 'up' if d.avg_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(d.avg_pnl) }} ₽</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Предупреждение о time_stop #}
+  {% if time_stop_pct > 50 %}
+  <div class="exit-warn">
+    ⚠ <strong>{{ time_stop_pct }}% сделок завершились по тайм-стопу</strong> — трейдер не дожидается движения.
+    Рассмотрите увеличение <code>HORIZON_BARS</code> (сейчас 12) до 24–36 баров с согласованным перелейблингом.
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Дрейф моделей ── #}
+<div class="panel span2 mt3">
+  <h2>Дрейф моделей <span class="muted fs-xs">(PSI входов · калибровка · decay по бумажным исходам)</span></h2>
   {% if drift %}
   <div class="table-wrap"><table>
     <thead><tr>
@@ -207,7 +396,11 @@
     <tbody>
       {% for d in drift %}
       <tr>
-        <td>{{ d.source }}</td><td class="num">{{ m(d.psi_max) }}</td><td class="muted">{{ d.psi_worst_feature or "—" }}</td>
+        <td>{{ d.source }}</td>
+        <td class="num {{ 'down' if d.psi_max is not none and d.psi_max > 0.25 else '' }}">
+          {{ m(d.psi_max) }}
+        </td>
+        <td class="muted">{{ d.psi_worst_feature or "—" }}</td>
         <td class="num">{{ m(d.live_calib_gap, '%.3f') }}</td>
         <td class="num">{% if d.win_rate_live is not none %}{{ "%.0f"|format(d.win_rate_live * 100) }}%{% else %}—{% endif %}</td>
         <td class="num">{% if d.win_rate_expected is not none %}{{ "%.0f"|format(d.win_rate_expected * 100) }}%{% else %}—{% endif %}</td>
@@ -218,7 +411,18 @@
       {% endfor %}
     </tbody>
   </table></div>
-  <p class="muted" style="font-size:11px; margin-top:8px;">PSI&gt;0.25 — заметный сдвиг входов (наблюдатель);
+  <p class="muted fs-xxs" style="margin-top:8px;">PSI&gt;0.25 — заметный сдвиг входов (наблюдатель);
     авто-halt только при реализованном провале калибровки/decay при ≥20 сделках.</p>
   {% else %}<p class="muted">Нет данных дрейфа (модели ещё не торговали достаточно).</p>{% endif %}
 </div>
+
+{# ── JS: фильтр вкладок (чистый, без библиотек) ── #}
+<script>
+function filterTrades(btn, source) {
+  document.querySelectorAll('#trades-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.querySelectorAll('#trades-table tbody tr').forEach(function(row) {
+    row.style.display = (!source || row.dataset.source === source) ? '' : 'none';
+  });
+}
+</script>

@@ -2,6 +2,40 @@
 {% import "_macros.html" as ui %}
 {% block title %}Дашборд — geoanalytics{% endblock %}
 {% block content %}
+{# ── Sticky status-bar: режим · ставка · сентимент (одна строка) ── #}
+<div class="status-bar" id="dash-statusbar">
+  {% if snap.consensus %}
+  {% set c = snap.consensus %}
+  {% set sb_stance = 'up' if c.stance == 'позитивная' else 'down' if c.stance == 'негативная' else 'flat' %}
+  <div class="sb-item">
+    <span class="sb-dot {{ 'warn' if sb_stance == 'flat' else 'err' if sb_stance == 'down' else '' }}"></span>
+    <span>Сентимент&nbsp;<strong class="{{ sb_stance }}">{{ c.stance }}</strong></span>
+    <span class="muted">{{ "%+.2f"|format(c.sent_ewma) }}</span>
+  </div>
+  <span class="sb-sep">|</span>
+  {% endif %}
+  {% if snap.key_rate is not none %}
+  <div class="sb-item">
+    <span>КС ЦБ&nbsp;<strong>{{ snap.key_rate }}%</strong></span>
+  </div>
+  <span class="sb-sep">|</span>
+  {% endif %}
+  {% if snap.consensus %}
+  <div class="sb-item">
+    <span class="muted">{{ snap.consensus.n_docs }} doc · {{ hours }}h</span>
+  </div>
+  <span class="sb-sep">|</span>
+  {% endif %}
+  {% if status and status.last_ingest %}
+  <div class="sb-item">
+    <span class="muted">Ингест:&nbsp;{{ status.last_ingest }}</span>
+  </div>
+  {% endif %}
+  <div style="margin-left:auto;">
+    <a href="/ui/track2" style="color:var(--accent); font-size:11px;">→ Трейдер</a>
+  </div>
+</div>
+
 <h1>Сводка рынка</h1>
 <p class="muted">Что по новостям за последние {{ hours }} ч.</p>
 
@@ -108,12 +142,24 @@
     <thead><tr><th>Тикер</th><th>Компания</th><th class="num">Изм. %</th><th class="num">Цена</th></tr></thead>
     <tbody>
       {% for m in snap.top_gainers %}
-      <tr><td class="up">{{ ui.asset_link(m.ticker) }}</td><td class="muted">{{ m.name or '' }}</td>
-        <td class="num up">{{ "%+.2f"|format(m.change_pct) }}</td><td class="num">{{ m.last }}</td></tr>
+      <tr>
+        <td class="up">{{ ui.asset_link(m.ticker) }}</td>
+        <td class="muted">{{ m.name or '' }}</td>
+        <td class="num">
+          <span class="sig sig--buy">{{ "%+.2f"|format(m.change_pct) }}%</span>
+        </td>
+        <td class="num">{{ m.last }}</td>
+      </tr>
       {% endfor %}
       {% for m in snap.top_losers %}
-      <tr><td class="down">{{ ui.asset_link(m.ticker) }}</td><td class="muted">{{ m.name or '' }}</td>
-        <td class="num down">{{ "%+.2f"|format(m.change_pct) }}</td><td class="num">{{ m.last }}</td></tr>
+      <tr>
+        <td class="down">{{ ui.asset_link(m.ticker) }}</td>
+        <td class="muted">{{ m.name or '' }}</td>
+        <td class="num">
+          <span class="sig sig--sell">{{ "%+.2f"|format(m.change_pct) }}%</span>
+        </td>
+        <td class="num">{{ m.last }}</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table></div>
