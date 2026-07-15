@@ -5,33 +5,6 @@
 <div id="pf-root">
 <h1>Портфель</h1>
 
-{# #4: ввод позиции прямо с дашборда (HTMX, hx-select берёт #pf-root из ответа). #}
-<form class="panel span2" hx-post="/ui/portfolio/add"
-      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
-      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
-  <label>Тикер<br>
-    <select name="ticker" required>
-      {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.ticker }}{% if a.name %} — {{ a.name }}{% endif %}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Количество<br><input name="quantity" type="number" step="any" min="0" required style="width:120px;"></label>
-  <label>Цена входа<br><input name="price" type="number" step="any" min="0" placeholder="опц." style="width:120px;"></label>
-  <button type="submit">Добавить</button>
-</form>
-
-{# Расширение состава: кэш/валютный баланс (RUB по номиналу, прочие — по курсу ЦБ). #}
-<form class="panel span2" hx-post="/ui/portfolio/cash"
-      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
-      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
-  <label>Валюта<br>
-    <select name="currency">
-      {% for c in ["RUB", "USD", "EUR", "CNY"] %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Остаток<br><input name="amount" type="number" step="any" placeholder="0 — удалить" style="width:140px;"></label>
-  <button type="submit">Задать кэш</button>
-</form>
-
 {% if report.error %}
 <div class="panel span2"><p class="muted">{{ report.error }}</p></div>
 {% else %}
@@ -41,9 +14,10 @@
 </div>
 
 {# Среднесрочная сводка-аналитика по портфелю (недельный ТФ): агрегатная стойка из позиционных. #}
+<div class="grid" style="margin-bottom: 14px;">
 {% if stance and stance.positions %}
 {% set pgn = 'up' if stance.score > 0.05 else ('down' if stance.score < -0.05 else 'flat') %}
-<div class="panel span2" style="margin-bottom:14px;">
+<div class="panel">
   <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
     <h2 style="margin:0;">Среднесрочная аналитика <span class="muted" style="font-size:12px;">(недельный ТФ)</span></h2>
     <span>Стойка портфеля: <strong class="{{ pgn }}">{{ stance.posture }}</strong></span>
@@ -88,7 +62,7 @@
 {# Стоимость портфеля во времени: фактическая по дневным снимкам, либо реконструкция по
    риск-серии доходностей (пока снимков < 2 дней). #}
 {% if value_chart %}
-<div class="panel span2">
+<div class="panel">
   <h2>Стоимость во времени <span class="muted" style="font-size:12px;">({{ value_chart.n }} дн.,
     {{ 'факт по снимкам' if report.value_series_source == 'snapshots' else 'реконструкция' }})</span></h2>
   <div class="chart-wrap" style="margin-top:8px;">
@@ -112,9 +86,11 @@
 </div>
 {% endif %}
 
+
+<div class="grid" style="margin-bottom: 14px;">
 {# P&L во времени (стоимость − база покупки): только при фактической истории по снимкам. #}
 {% if pnl_chart %}
-<div class="panel span2">
+<div class="panel">
   <h2>P&amp;L во времени <span class="muted" style="font-size:12px;">({{ pnl_chart.n }} дн.)</span></h2>
   <div class="chart-wrap" style="margin-top:8px;">
   <svg class="chart" viewBox="0 0 {{ pnl_chart.width }} {{ pnl_chart.height }}"
@@ -136,6 +112,7 @@
     <span class="v">{{ "{:,.0f}".format(pnl_chart.min) }} … {{ "{:,.0f}".format(pnl_chart.max) }}</span></div>
 </div>
 {% endif %}
+</div>
 
 <div class="grid" style="margin-top:18px;">
   {# Аллокация по секторам — кольцевая диаграмма + легенда. #}
@@ -169,9 +146,9 @@
         <rect x="{{ r.x }}" y="{{ r.y }}" width="{{ r.w }}" height="{{ r.h }}" rx="3"
               fill="{{ r.color }}"><title>{{ r.label }} — {{ r.pct }}%</title></rect>
         {% if r.w > 60 and r.h > 34 %}
-        <text x="{{ r.x + 8 }}" y="{{ r.y + 24 }}" fill="#0b1220" font-size="16"
+        <text x="{{ r.x + 8 }}" y="{{ r.y + 24 }}" fill="var(--bg)" font-size="16"
               font-weight="700">{{ r.label }}</text>
-        <text x="{{ r.x + 8 }}" y="{{ r.y + 44 }}" fill="#0b1220" font-size="13">{{ r.pct }}%</text>
+        <text x="{{ r.x + 8 }}" y="{{ r.y + 44 }}" fill="var(--bg)" font-size="13">{{ r.pct }}%</text>
         {% endif %}
       </g>
       {% endfor %}
@@ -265,16 +242,37 @@
   </div>
   {% endif %}
 </div>
-
-{% if correlations %}
-<div class="panel span2" style="margin-top:18px;">
-  <h2>Корреляции холдингов</h2>
-  {% for c in correlations %}
-  <div class="metric"><span class="k">{{ c.pair }}</span>
-    <span class="v {{ 'up' if c.r >= 0 else 'down' }}">{{ "%+.2f"|format(c.r) }}</span></div>
-  {% endfor %}
 </div>
-{% endif %}
+<div class="grid" style="margin-top:18px;">
+{# #4: ввод позиции прямо с дашборда (HTMX, hx-select берёт #pf-root из ответа). #}
+<form class="panel" hx-post="/ui/portfolio/add"
+      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
+      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+  <h2 style="width: 100%; margin-bottom: 0;">Добавить актив</h2>
+  <label style="flex: 1; min-width: 100px;">Тикер<br>
+    <select name="ticker" required style="width: 100%;">
+      {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.ticker }}{% if a.name %} — {{ a.name }}{% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <label style="flex: 1; min-width: 100px;">Количество<br><input name="quantity" type="number" step="any" min="0" required style="width: 100%;"></label>
+  <label style="flex: 1; min-width: 100px;">Цена входа<br><input name="price" type="number" step="any" min="0" placeholder="опц." style="width: 100%;"></label>
+  <button type="submit">Добавить</button>
+</form>
+
+{# Расширение состава: кэш/валютный баланс (RUB по номиналу, прочие — по курсу ЦБ). #}
+<form class="panel" hx-post="/ui/portfolio/cash"
+      hx-target="#pf-root" hx-select="#pf-root" hx-swap="outerHTML"
+      style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+  <h2 style="width: 100%; margin-bottom: 0;">Добавить кэш</h2>
+  <label style="flex: 1; min-width: 100px;">Валюта<br>
+    <select name="currency" style="width: 100%;">
+      {% for c in ["RUB", "USD", "EUR", "CNY"] %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label style="flex: 1; min-width: 100px;">Остаток<br><input name="amount" type="number" step="any" placeholder="0 — удалить" style="width: 100%;"></label>
+  <button type="submit">Задать кэш</button>
+</form>
+</div>
 {% endif %}
 </div>
 {% endblock %}

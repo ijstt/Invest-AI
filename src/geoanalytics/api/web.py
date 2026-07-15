@@ -910,18 +910,19 @@ def news_partial(request: Request, hours: int = 24, limit: int = 15):
 
 @router.get("/ui/asset", response_class=HTMLResponse)
 def asset_page(request: Request, ticker: str | None = None):
-    """Страница актива (полная). При наличии `ticker` сразу показывает отчёт."""
+    """Страница актива (полная). При наличии `ticker` сразу показывает отчёт. По умолчанию IMOEX."""
+    if not ticker or not ticker.strip():
+        ticker = "IMOEX"
     ctx: dict = {"ticker": ticker, "assets": list_assets()}
-    if ticker and ticker.strip():
-        ctx.update(_asset_context(ticker))
+    ctx.update(_asset_context(ticker))
     return templates.TemplateResponse(request, "asset.html", ctx)
 
 
 @router.get("/ui/partials/asset", response_class=HTMLResponse)
 def asset_partial(request: Request, ticker: str = ""):
     """HTMX-фрагмент с отчётом по активу."""
-    if not ticker.strip():
-        return HTMLResponse('<p class="muted">Введите тикер.</p>')
+    if not ticker or not ticker.strip():
+        ticker = "IMOEX"
     return templates.TemplateResponse(request, "_asset_result.html", _asset_context(ticker))
 
 

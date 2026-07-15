@@ -21,8 +21,6 @@
   <div style="margin-top:6px;">
     {% for d in st.drivers %}
     <div class="metric">
-      <span class="k">
-        {% if d.sign > 0 %}<span class="up">▲</span>{% elif d.sign < 0 %}<span class="down">▼</span>{% else %}<span class="flat">■</span>{% endif %}
         {{ d.label }}{% if d.detail %} <span class="muted" style="font-size:11px;">{{ d.detail }}</span>{% endif %}</span>
       <span class="v {{ 'up' if d.contribution >= 0 else 'down' }}">{{ "%+.2f"|format(d.contribution) }}</span>
     </div>
@@ -68,36 +66,40 @@
   {% endif %}
 
   <div class="panel">
-    <h2>Макро и факторы</h2>
-    {% if report.macro.get('key_rate') is not none %}
-    <div class="metric"><span class="k">Ключевая ставка</span><span class="v">{{ report.macro.key_rate }}%</span></div>
-    {% endif %}
-    {% for cur, val in (report.macro.get('fx') or {}).items() %}
-    <div class="metric"><span class="k">{{ cur }}/RUB</span><span class="v">{{ "%.2f"|format(val) }}</span></div>
-    {% endfor %}
-    {% if report.factors.get('peers') %}
-    <div class="metric"><span class="k">Пиры</span><span class="v">
-      {% for p in report.factors.peers %}{{ ui.asset_link(p) }}{% if not loop.last %}, {% endif %}{% endfor %}
-    </span></div>
-    {% endif %}
-    {% for name, val in report.correlations.items() %}
-    <div class="metric"><span class="k">Корр. {{ name }}</span>
-      <span class="v {{ 'up' if val >= 0 else 'down' }}">{{ "%+.2f"|format(val) }}</span></div>
-    {% endfor %}
-    {% if report.dividend %}
-    <div class="metric"><span class="k">Дивиденд (из новостей)</span>
-      <span class="v">{{ "%g"|format(report.dividend.value) }} ₽/акция{% if report.dividend.yield_pct is not none %} ≈ {{ report.dividend.yield_pct }}%{% endif %}</span></div>
-    {% endif %}
+    <h2 style="margin: 0 0 12px 0;">Макро и факторы</h2>
+    <div>
+      {% if report.macro.get('key_rate') is not none %}
+      <div class="metric"><span class="k">Ключевая ставка</span><span class="v">{{ report.macro.key_rate }}%</span></div>
+      {% endif %}
+      {% for cur, val in (report.macro.get('fx') or {}).items() %}
+      <div class="metric"><span class="k">{{ cur }}/RUB</span><span class="v">{{ "%.2f"|format(val) }}</span></div>
+      {% endfor %}
+      {% if report.factors.get('peers') %}
+      <div class="metric"><span class="k">Пиры</span><span class="v">
+        {% for p in report.factors.peers %}{{ ui.asset_link(p) }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </span></div>
+      {% endif %}
+      {% for name, val in report.correlations.items() %}
+      <div class="metric"><span class="k">Корр. {{ name }}</span>
+        <span class="v {{ 'up' if val >= 0 else 'down' }}">{{ "%+.2f"|format(val) }}</span></div>
+      {% endfor %}
+      {% if report.dividend %}
+      <div class="metric"><span class="k">Дивиденд (из новостей)</span>
+        <span class="v">{{ "%g"|format(report.dividend.value) }} ₽/акция{% if report.dividend.yield_pct is not none %} ≈ {{ report.dividend.yield_pct }}%{% endif %}</span></div>
+      {% endif %}
+    </div>
   </div>
 
   {# H5: фундаментальные метрики из отчётов эмитента (rule-based из PDF). #}
   {% if report.fundamentals %}
   <div class="panel">
-    <h2>Фундаменталка <span class="muted" style="font-size:12px;">(из отчётов)</span></h2>
-    {% for f in report.fundamentals %}
-    <div class="metric"><span class="k">{{ f.label }}{% if f.period %} <span class="muted" style="font-size:11px;">{{ f.period }}</span>{% endif %}</span>
-      <span class="v">{{ f.display }}</span></div>
-    {% endfor %}
+    <h2 style="margin: 0 0 12px 0;">Фундаменталка <span class="muted" style="font-size:12px;">(из отчётов)</span></h2>
+    <div>
+      {% for f in report.fundamentals %}
+      <div class="metric"><span class="k">{{ f.label }}{% if f.period %} <span class="muted" style="font-size:11px;">{{ f.period }}</span>{% endif %}</span>
+        <span class="v">{{ f.display }}</span></div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 
@@ -105,132 +107,139 @@
   {% if report.composition %}
   {% set comp = report.composition %}
   <div class="panel">
-    <h2>Состав и профиль</h2>
-    {% if comp.profile.description %}
-    <p class="muted" style="font-size:12px; margin:0 0 8px;">{{ comp.profile.description }}</p>
-    {% endif %}
-    {% if comp.profile.market_cap_display %}
-    <div class="metric"><span class="k">Капитализация</span><span class="v">{{ comp.profile.market_cap_display }}</span></div>
-    {% endif %}
-    {% if comp.profile.free_float is not none %}
-    <div class="metric"><span class="k">Free-float</span><span class="v">{{ "%.0f"|format(comp.profile.free_float) }}%</span></div>
-    {% endif %}
-    {% if comp.profile.shares %}
-    <div class="metric"><span class="k">Акций</span><span class="v">{{ "{:,.0f}".format(comp.profile.shares).replace(",", " ") }}</span></div>
-    {% endif %}
-    {% if comp.segments %}
-    <div style="margin-top:8px;">
-      <div class="muted" style="font-size:11px; margin-bottom:2px;">Сегменты выручки{% if comp.segments[0].period %} ({{ comp.segments[0].period }}){% endif %}</div>
-      {% for s in comp.segments %}
-      <div class="metric"><span class="k">{{ s.segment }}</span>
-        <span class="v">{{ s.display }}{% if s.share is not none %} <span class="muted">· {{ "%.0f"|format(s.share) }}%</span>{% endif %}</span></div>
-      {% endfor %}
+    <h2 style="margin: 0 0 12px 0;">Состав и профиль</h2>
+    <div>
+      {% if comp.profile.description %}
+      <p class="muted" style="font-size:12px; margin:0 0 8px;">{{ comp.profile.description }}</p>
+      {% endif %}
+      {% if comp.profile.market_cap_display %}
+      <div class="metric"><span class="k">Капитализация</span><span class="v">{{ comp.profile.market_cap_display }}</span></div>
+      {% endif %}
+      {% if comp.profile.free_float is not none %}
+      <div class="metric"><span class="k">Free-float</span><span class="v">{{ "%.0f"|format(comp.profile.free_float) }}%</span></div>
+      {% endif %}
+      {% if comp.profile.shares %}
+      <div class="metric"><span class="k">Акций</span><span class="v">{{ "{:,.0f}".format(comp.profile.shares).replace(",", " ") }}</span></div>
+      {% endif %}
+      {% if comp.segments %}
+      <div style="margin-top:8px;">
+        <div class="muted" style="font-size:11px; margin-bottom:2px;">Сегменты выручки{% if comp.segments[0].period %} ({{ comp.segments[0].period }}){% endif %}</div>
+        {% for s in comp.segments %}
+        <div class="metric"><span class="k">{{ s.segment }}</span>
+          <span class="v">{{ s.display }}{% if s.share is not none %} <span class="muted">· {{ "%.0f"|format(s.share) }}%</span>{% endif %}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
   {% endif %}
 
   {# L3: кросс-секционные факторные экспозиции (z-скоры по вселенной акций + перцентиль). #}
   {% if report.factor_ranks %}
   <div class="panel">
-    <h2>Факторы <span class="muted" style="font-size:12px;">(ранг по рынку)</span></h2>
-    {% for fr in report.factor_ranks %}
-    <div class="metric" style="display:block; margin-bottom:6px;">
-      <div style="display:flex; justify-content:space-between;">
-        <span class="k">{{ fr.label }}</span>
-        <span class="v {{ 'up' if fr.zscore >= 0 else 'down' }}">{{ "%+.2f"|format(fr.zscore) }}σ
-          {% if fr.percentile is not none %}<span class="muted">· {{ fr.percentile|round|int }}-й перцентиль</span>{% endif %}</span>
+    <h2 style="margin: 0 0 12px 0;">Факторы <span class="muted" style="font-size:12px;">(ранг по рынку)</span></h2>
+    <div>
+      {% for fr in report.factor_ranks %}
+      <div class="metric" style="display:block; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span class="k">{{ fr.label }}</span>
+          <span class="v {{ 'up' if fr.zscore >= 0 else 'down' }}">{{ "%+.2f"|format(fr.zscore) }}σ
+            {% if fr.percentile is not none %}<span class="muted">· {{ fr.percentile|round|int }}-й перцентиль</span>{% endif %}</span>
+        </div>
+        {% if fr.percentile is not none %}
+        <div style="height:4px; background:var(--border); border-radius:2px; margin-top:3px;">
+          <div style="height:4px; width:{{ fr.percentile }}%; border-radius:2px;
+                      background:var(--{{ 'up' if fr.zscore >= 0 else 'down' }});"></div>
+        </div>
+        {% endif %}
       </div>
-      {% if fr.percentile is not none %}
-      <div style="height:4px; background:var(--border); border-radius:2px; margin-top:3px;">
-        <div style="height:4px; width:{{ fr.percentile }}%; border-radius:2px;
-                    background:var(--{{ 'up' if fr.zscore >= 0 else 'down' }});"></div>
-      </div>
+      {% endfor %}
+      {# L5: тренд композитного фактора во времени (появляется по мере накопления срезов). #}
+      {% if factor_trend %}
+      <div class="muted" style="font-size:11px; margin-top:8px;">Композит во времени</div>
+      <svg class="chart" viewBox="0 0 {{ factor_trend.width }} {{ factor_trend.height }}"
+           preserveAspectRatio="none" style="height:60px;">
+        <polyline points="{{ factor_trend.points }}" style="stroke: var(--{{ 'up' if factor_trend.up else 'down' }});"/>
+      </svg>
       {% endif %}
     </div>
-    {% endfor %}
-    {# L5: тренд композитного фактора во времени (появляется по мере накопления срезов). #}
-    {% if factor_trend %}
-    <div class="muted" style="font-size:11px; margin-top:8px;">Композит во времени</div>
-    <svg class="chart" viewBox="0 0 {{ factor_trend.width }} {{ factor_trend.height }}"
-         preserveAspectRatio="none" style="height:60px;">
-      <polyline points="{{ factor_trend.points }}" style="stroke: var(--{{ 'up' if factor_trend.up else 'down' }});"/>
-    </svg>
-    {% endif %}
   </div>
   {% endif %}
 
   {# B3/F10: прогнозы брокеров — таргеты с потенциалом к текущей цене и сюрпризом по факту. #}
   {% if report.forecasts %}
   <div class="panel">
-    <h2>Прогнозы брокеров <span class="muted" style="font-size:12px;">(ожидания, не факт)</span></h2>
-    {% for f in report.forecasts %}
-    <div class="metric">
-      <span class="k">{{ f.label }}
-        {% if f.source %}<span class="muted" style="font-size:11px;">{{ f.source }}</span>{% endif %}
-        {% if f.target_date %}<span class="muted" style="font-size:11px;">→ {{ f.target_date }}</span>{% endif %}</span>
-      <span class="v">{{ "%g"|format(f.value) }} {{ f.unit }}
-        {% if f.surprise_pct is not none %}<span class="muted">· сюрприз
-          <span class="{{ 'up' if f.surprise_pct >= 0 else 'down' }}">{{ "%+.1f"|format(f.surprise_pct) }}%</span></span>
-        {% elif f.implied_pct is not none %}<span class="muted">· потенциал
-          <span class="{{ 'up' if f.implied_pct >= 0 else 'down' }}">{{ "%+.1f"|format(f.implied_pct) }}%</span></span>
-        {% endif %}</span>
+    <h2 style="margin: 0 0 12px 0;">Прогнозы брокеров <span class="muted" style="font-size:12px;">(ожидания)</span></h2>
+    <div>
+      {% for f in report.forecasts %}
+      <div class="metric">
+        <span class="k">{{ f.label }}
+          {% if f.source %}<span class="muted" style="font-size:11px;">{{ f.source }}</span>{% endif %}
+          {% if f.target_date %}<span class="muted" style="font-size:11px;">→ {{ f.target_date }}</span>{% endif %}</span>
+        <span class="v">{{ "%g"|format(f.value) }} {{ f.unit }}
+          {% if f.surprise_pct is not none %}<span class="muted">· сюрприз
+            <span class="{{ 'up' if f.surprise_pct >= 0 else 'down' }}">{{ "%+.1f"|format(f.surprise_pct) }}%</span></span>
+          {% elif f.implied_pct is not none %}<span class="muted">· потенциал
+            <span class="{{ 'up' if f.implied_pct >= 0 else 'down' }}">{{ "%+.1f"|format(f.implied_pct) }}%</span></span>
+          {% endif %}</span>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
   </div>
   {% endif %}
 </div>
 
+<div class="grid" style="margin-top: 18px;">
 {% if report.events %}
-<div class="panel span2" style="margin-top:18px;">
-  <h2>События влияния</h2>
-  {% for e in report.events %}
-  <div class="metric">
-    <span class="k">
-      {% if e.direction == 'positive' %}<span class="up">▲</span>
-      {% elif e.direction == 'negative' %}<span class="down">▼</span>
-      {% else %}<span class="flat">■</span>{% endif %}
-      <span class="tag">{{ e.type }}</span> {{ ui.news_link(e.title, e.url) }}</span>
-    <span class="v muted">сила {{ e.magnitude }}</span>
+<div class="panel">
+  <h2 style="margin: 0 0 12px 0;">События влияния</h2>
+  <div>
+    {% for e in report.events %}
+    <div class="metric">
+      <span class="k">
+        <span class="tag">{{ e.type }}</span> {{ ui.news_link(e.title, e.url) }}</span>
+      <span class="v muted">сила {{ e.magnitude }}</span>
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
 {% endif %}
 
 {% if report.graph_impacts %}
-<div class="panel span2" style="margin-top:18px;">
-  <h2>Косвенно через граф связей</h2>
-  {% for g in report.graph_impacts %}
-  <div class="metric">
-    <span class="k">
-      {% if g.direction == 'positive' %}<span class="up">▲</span>
-      {% elif g.direction == 'negative' %}<span class="down">▼</span>
-      {% else %}<span class="flat">■</span>{% endif %}
-      {{ ui.asset_link(g.via) }} <span class="tag">{{ g.relation }}</span> {{ ui.news_link(g.title, g.url) }}</span>
-    <span class="v muted">сила {{ g.magnitude }}</span>
+<div class="panel">
+  <h2 style="margin: 0 0 12px 0;">Косвенно через граф связей</h2>
+  <div>
+    {% for g in report.graph_impacts %}
+    <div class="metric">
+      <span class="k">
+        {{ ui.asset_link(g.via) }} <span class="tag">{{ g.relation }}</span> {{ ui.news_link(g.title, g.url) }}</span>
+      <span class="v muted">сила {{ g.magnitude }}</span>
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
 {% endif %}
 
 {% if report.news %}
-<div class="panel span2" style="margin-top:18px;">
-  <h2>Связанные новости</h2>
-  {% for n in report.news[:12] %}
-  <div class="metric">
-    <span class="k">
-      {% if n.sentiment == 'positive' %}<span class="up">▲</span>
-      {% elif n.sentiment == 'negative' %}<span class="down">▼</span>
-      {% else %}<span class="flat">■</span>{% endif %} {{ ui.news_link(n.title, n.url) }}</span>
-    <span class="v"><span class="tag">{{ n.event_type or '—' }}</span></span>
+<div class="panel">
+  <h2 style="margin: 0 0 12px 0;">Связанные новости</h2>
+  <div>
+    {% for n in report.news[:12] %}
+    <div class="metric">
+      <span class="k">
+        {{ ui.news_link(n.title, n.url) }}</span>
+      <span class="v"><span class="tag">{{ n.event_type or '—' }}</span></span>
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
 {% endif %}
 
 {% if report.narrative %}
-<div class="panel span2" style="margin-top:18px;">
-  <h2>Контекст</h2><div>{{ report.narrative }}</div>
+<div class="panel">
+  <h2 style="display: inline;">Контекст</h2>
+  <div style="margin-top: 12px;">{{ report.narrative }}</div>
 </div>
 {% endif %}
+</div>
 {% endif %}

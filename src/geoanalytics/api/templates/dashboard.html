@@ -41,142 +41,149 @@
 
 {% if status %}<div style="margin:10px 0 16px;">{% include "_status.html" %}</div>{% endif %}
 
-<div class="panel span2 section">
-  <h2>Спросить аналитику</h2>
-  <form class="bar" action="/ui/partials/ask" method="get"
-        hx-get="/ui/partials/ask" hx-target="#ask-result" hx-swap="innerHTML"
-        hx-indicator="#ask-spin" style="margin-bottom:0;">
-    <input name="q" placeholder="Например: как дела у Сбербанка? что по санкциям?"
-           style="flex:1; min-width:280px;" autocomplete="off">
-    <button type="submit">Спросить</button>
-    <span id="ask-spin" class="htmx-indicator muted">думаю…</span>
-  </form>
-  <div id="ask-result" style="margin-top:12px;"></div>
-</div>
-
-{% if snap.consensus %}
-{% set c = snap.consensus %}
-{% set stance_css = 'up' if c.stance == 'позитивная' else 'down' if c.stance == 'негативная' else 'flat' %}
-{% set verdict = {'позитивная': 'Рынок оптимистичен', 'негативная': 'Рынок под давлением', 'нейтральная': 'Рынок нейтрален'}.get(c.stance, 'Рынок ' ~ c.stance) %}
-{# Прототип «Пульс рынка» (Направление A): вердикт словом + пульс-линия настроения + витали. #}
-<section class="pulse-hero">
-  <div class="ph-top">
-    <div>
-      <div class="ph-eyebrow">Настроение рынка · индекс на {{ c.day }}</div>
-      <div class="ph-verdict ph-{{ stance_css }}">{{ verdict }}</div>
-    </div>
-    <div class="ph-score ph-{{ stance_css }}">{{ "%+.2f"|format(c.sent_ewma) }}</div>
-  </div>
-  {% if pulse %}
-  <svg class="ph-pulse" viewBox="0 0 {{ pulse.chart.width }} {{ pulse.chart.height }}"
-       preserveAspectRatio="none" aria-hidden="true">
-    {% if pulse.zero_y is not none %}<line class="ph-zero" x1="0" y1="{{ pulse.zero_y }}"
-       x2="{{ pulse.chart.width }}" y2="{{ pulse.zero_y }}"/>{% endif %}
-    <polyline class="ph-line ph-stroke-{{ 'up' if pulse.up else 'down' }}" points="{{ pulse.chart.points }}"/>
-  </svg>
-  <div class="ph-cap">Пульс настроения · {{ pulse.days }} дней</div>
-  {% endif %}
-  <div class="ph-vitals">
-    <span><b class="{{ 'up' if c.sent_ewma > 0 else 'down' }}">{{ "%+.2f"|format(c.sent_ewma) }}</b>моментум</span>
-    <span><b class="{{ 'up' if c.breadth > 0 else 'down' }}">{{ "%+.2f"|format(c.breadth) }}</b>ширина</span>
-    <span><b>{{ c.dispersion }}</b>разброс мнений</span>
-    <span><b>{{ c.n_docs }}</b>документов</span>
-  </div>
-  {% if c.sectors_pos or c.sectors_neg %}
-  <div class="ph-foot chips fs-sm">
-    {% if c.sectors_pos %}<span class="muted">Позитив:</span>
-      {% for s, v in c.sectors_pos %}<span class="tag" style="color:var(--up)">{{ s }} {{ "%+.2f"|format(v) }}</span>{% endfor %}{% endif %}
-    {% if c.sectors_neg %}<span class="muted" style="margin-left:6px;">Негатив:</span>
-      {% for s, v in c.sectors_neg %}<span class="tag" style="color:var(--down)">{{ s }} {{ "%+.2f"|format(v) }}</span>{% endfor %}{% endif %}
-  </div>
-  {% endif %}
-  {% if c.divergences %}
-  <div class="ph-foot chips fs-sm">
-    <span class="muted">⚠ Дивергенции цена↔настроение:</span>
-    {% for d in c.divergences %}<span class="tag">{{ ui.asset_link(d.ticker) }} цена {{ "%+.1f"|format(d.change_pct) }}% / настр. {{ "%+.2f"|format(d.sent_ewma) }}</span>{% endfor %}
-  </div>
-  {% endif %}
-</section>
-{% endif %}
-
-{% if snap.llm_summary %}
-<div class="panel span2 section">
-  <h2>Сводка</h2>
-  <div>{{ snap.llm_summary }}</div>
-</div>
-{% endif %}
-
-<div class="grid" style="margin-top:14px;">
-  <div class="panel">
-    <h2>Макро</h2>
-    {% if snap.key_rate is not none %}
-    <div class="metric"><span class="k">Ключевая ставка ЦБ</span>
-      <span class="v">{{ snap.key_rate }}% <span class="muted">({{ snap.key_rate_date }})</span></span></div>
+<div class="dash-layout">
+  <!-- ЛЕВАЯ КОЛОНКА -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    {% if snap.consensus %}
+    {% set c = snap.consensus %}
+    {% set stance_css = 'up' if c.stance == 'позитивная' else 'down' if c.stance == 'негативная' else 'flat' %}
+    {% set verdict = {'позитивная': 'Рынок оптимистичен', 'негативная': 'Рынок под давлением', 'нейтральная': 'Рынок нейтрален'}.get(c.stance, 'Рынок ' ~ c.stance) %}
+    {# Прототип «Пульс рынка» (Направление A): вердикт словом + пульс-линия настроения + витали. #}
+    <section class="pulse-hero" style="margin: 0;">
+      <div class="ph-top">
+        <div>
+          <div class="ph-eyebrow">Настроение рынка · индекс на {{ c.day }}</div>
+          <div class="ph-verdict ph-{{ stance_css }}">{{ verdict }}</div>
+        </div>
+        <div class="ph-score ph-{{ stance_css }}">{{ "%+.2f"|format(c.sent_ewma) }}</div>
+      </div>
+      {% if pulse %}
+      <svg class="ph-pulse" viewBox="0 0 {{ pulse.chart.width }} {{ pulse.chart.height }}"
+           preserveAspectRatio="none" aria-hidden="true">
+        {% if pulse.zero_y is not none %}<line class="ph-zero" x1="0" y1="{{ pulse.zero_y }}"
+           x2="{{ pulse.chart.width }}" y2="{{ pulse.zero_y }}"/>{% endif %}
+        <polyline class="ph-line ph-stroke-{{ 'up' if pulse.up else 'down' }}" points="{{ pulse.chart.points }}"/>
+      </svg>
+      <div class="ph-cap">Пульс настроения · {{ pulse.days }} дней</div>
+      {% endif %}
+      <div class="ph-vitals">
+        <span><b class="{{ 'up' if c.sent_ewma > 0 else 'down' }}">{{ "%+.2f"|format(c.sent_ewma) }}</b>моментум</span>
+        <span><b class="{{ 'up' if c.breadth > 0 else 'down' }}">{{ "%+.2f"|format(c.breadth) }}</b>ширина</span>
+        <span><b>{{ c.dispersion }}</b>разброс мнений</span>
+        <span><b>{{ c.n_docs }}</b>документов</span>
+      </div>
+      {% if c.sectors_pos or c.sectors_neg %}
+      <div class="ph-foot chips fs-sm">
+        {% if c.sectors_pos %}<span class="muted">Позитив:</span>
+          {% for s, v in c.sectors_pos %}<span class="tag" style="color:var(--up)">{{ s }} {{ "%+.2f"|format(v) }}</span>{% endfor %}{% endif %}
+        {% if c.sectors_neg %}<span class="muted" style="margin-left:6px;">Негатив:</span>
+          {% for s, v in c.sectors_neg %}<span class="tag" style="color:var(--down)">{{ s }} {{ "%+.2f"|format(v) }}</span>{% endfor %}{% endif %}
+      </div>
+      {% endif %}
+      {% if c.divergences %}
+      <div class="ph-foot chips fs-sm">
+        <span class="muted">⚠ Дивергенции цена↔настроение:</span>
+        {% for d in c.divergences %}<span class="tag">{{ ui.asset_link(d.ticker) }} цена {{ "%+.1f"|format(d.change_pct) }}% / настр. {{ "%+.2f"|format(d.sent_ewma) }}</span>{% endfor %}
+      </div>
+      {% endif %}
+    </section>
     {% endif %}
-    {% for cur, val in snap.fx.items() %}
-    <div class="metric"><span class="k">{{ cur }}/RUB</span><span class="v">{{ "%.2f"|format(val) }}</span></div>
-    {% else %}
-    {% if snap.key_rate is none %}<p class="muted">нет макро-данных</p>{% endif %}
-    {% endfor %}
+
+    <div class="grid" style="margin: 0;">
+      <div class="panel">
+        <h2>Макро</h2>
+        {% if snap.key_rate is not none %}
+        <div class="metric"><span class="k">Ключевая ставка ЦБ</span>
+          <span class="v">{{ snap.key_rate }}% <span class="muted">({{ snap.key_rate_date }})</span></span></div>
+        {% endif %}
+        {% for cur, val in snap.fx.items() %}
+        <div class="metric"><span class="k">{{ cur }}/RUB</span><span class="v">{{ "%.2f"|format(val) }}</span></div>
+        {% else %}
+        {% if snap.key_rate is none %}<p class="muted">нет макро-данных</p>{% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="panel">
+        <h2>Настроение рынка</h2>
+        {% set sb = snap.sentiment_breakdown %}
+        <div class="metric"><span class="k">Тональность (поз/нейтр/нег)</span>
+          <span class="v">
+            <span class="up">+{{ sb.get('positive', 0) }}</span> /
+            <span class="flat">={{ sb.get('neutral', 0) }}</span> /
+            <span class="down">−{{ sb.get('negative', 0) }}</span>
+          </span></div>
+        <div class="metric"><span class="k">Темы</span><span class="v">
+          {% for name, n in snap.top_events %}<span class="tag">{{ name }} ({{ n }})</span> {% else %}—{% endfor %}
+        </span></div>
+      </div>
+    </div>
+
+    {% if snap.top_gainers or snap.top_losers %}
+    <div class="panel" style="margin: 0;">
+      <h2>Топ-движения (TQBR)</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Тикер</th><th>Компания</th><th class="num">Изм. %</th><th class="num">Цена</th></tr></thead>
+        <tbody>
+          {% for m in snap.top_gainers %}
+          <tr>
+            <td class="up">{{ ui.asset_link(m.ticker) }}</td>
+            <td class="muted">{{ m.name or '' }}</td>
+            <td class="num">
+              <span class="sig sig--buy">{{ "%+.2f"|format(m.change_pct) }}%</span>
+            </td>
+            <td class="num">{{ m.last }}</td>
+          </tr>
+          {% endfor %}
+          {% for m in snap.top_losers %}
+          <tr>
+            <td class="down">{{ ui.asset_link(m.ticker) }}</td>
+            <td class="muted">{{ m.name or '' }}</td>
+            <td class="num">
+              <span class="sig sig--sell">{{ "%+.2f"|format(m.change_pct) }}%</span>
+            </td>
+            <td class="num">{{ m.last }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {% endif %}
   </div>
 
-  <div class="panel">
-    <h2>Настроение рынка</h2>
-    {% set sb = snap.sentiment_breakdown %}
-    <div class="metric"><span class="k">Тональность (поз/нейтр/нег)</span>
-      <span class="v">
-        <span class="up">+{{ sb.get('positive', 0) }}</span> /
-        <span class="flat">={{ sb.get('neutral', 0) }}</span> /
-        <span class="down">−{{ sb.get('negative', 0) }}</span>
-      </span></div>
-    <div class="metric"><span class="k">Темы</span><span class="v">
-      {% for name, n in snap.top_events %}<span class="tag">{{ name }} ({{ n }})</span> {% else %}—{% endfor %}
-    </span></div>
-  </div>
-</div>
+  <!-- ПРАВАЯ КОЛОНКА -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="panel" style="margin: 0;">
+      <form class="bar" action="/ui/partials/ask" method="get"
+            hx-get="/ui/partials/ask" hx-target="#ask-result" hx-swap="innerHTML"
+            hx-indicator="#ask-spin" style="margin-bottom:0;">
+        <input name="q" placeholder="Спросить аналитику..."
+               style="flex:1; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); font-size: 14px;" autocomplete="off">
+        <button type="submit" style="padding: 12px 16px; border-radius: 8px;">Задать вопрос</button>
+        <span id="ask-spin" class="htmx-indicator muted" style="margin-left: 12px;">думаю…</span>
+      </form>
+      <div id="ask-result"></div>
+    </div>
 
-{% if snap.top_gainers or snap.top_losers %}
-<div class="panel span2 mt3">
-  <h2>Топ-движения (TQBR)</h2>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Тикер</th><th>Компания</th><th class="num">Изм. %</th><th class="num">Цена</th></tr></thead>
-    <tbody>
-      {% for m in snap.top_gainers %}
-      <tr>
-        <td class="up">{{ ui.asset_link(m.ticker) }}</td>
-        <td class="muted">{{ m.name or '' }}</td>
-        <td class="num">
-          <span class="sig sig--buy">{{ "%+.2f"|format(m.change_pct) }}%</span>
-        </td>
-        <td class="num">{{ m.last }}</td>
-      </tr>
-      {% endfor %}
-      {% for m in snap.top_losers %}
-      <tr>
-        <td class="down">{{ ui.asset_link(m.ticker) }}</td>
-        <td class="muted">{{ m.name or '' }}</td>
-        <td class="num">
-          <span class="sig sig--sell">{{ "%+.2f"|format(m.change_pct) }}%</span>
-        </td>
-        <td class="num">{{ m.last }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table></div>
-</div>
-{% endif %}
+    {% if snap.llm_summary %}
+    <div class="panel" style="margin: 0;">
+      <h2>Сводка</h2>
+      <div>{{ snap.llm_summary }}</div>
+    </div>
+    {% endif %}
 
-<div class="panel span2 mt3">
-  <div class="row" style="align-items:center;">
-    <h2 class="mt0">Свежие заголовки</h2>
-    <button type="button" hx-get="/ui/partials/news?hours={{ hours }}"
-            hx-target="#news-feed" hx-swap="innerHTML"
-            style="padding:4px 10px; font-size:13px;">↻ Обновить</button>
-  </div>
-  <!-- Авто-обновление каждые 60с (HTMX-поллинг); без JS виден отрендеренный список. -->
-  <div id="news-feed" hx-get="/ui/partials/news?hours={{ hours }}"
-       hx-trigger="every 60s" hx-swap="innerHTML" style="margin-top:10px;">
-    {% with headlines = snap.headlines %}{% include "_news_feed.html" %}{% endwith %}
+    <div class="panel" style="margin: 0;">
+      <div class="row" style="align-items:center;">
+        <h2 class="mt0">Свежие заголовки</h2>
+        <button type="button" hx-get="/ui/partials/news?hours={{ hours }}"
+                hx-target="#news-feed" hx-swap="innerHTML"
+                style="padding:4px 10px; font-size:13px;">↻</button>
+      </div>
+      <!-- Авто-обновление каждые 60с -->
+      <div id="news-feed" hx-get="/ui/partials/news?hours={{ hours }}"
+           hx-trigger="every 60s" hx-swap="innerHTML" style="margin-top:10px;">
+        {% with headlines = snap.headlines %}{% include "_news_feed.html" %}{% endwith %}
+      </div>
+    </div>
   </div>
 </div>
 

@@ -1,20 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Актив — geoanalytics{% endblock %}
 {% block content %}
-<h1>Аналитика актива</h1>
-
-<form class="bar" action="/ui/asset" method="get"
-      hx-get="/ui/partials/asset" hx-target="#asset-result" hx-push-url="false">
-  <input type="text" name="ticker" placeholder="Тикер, напр. SBER" list="tickers"
-         value="{{ ticker or '' }}" autocomplete="off" autofocus>
-  <datalist id="tickers">
-    {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.name }}</option>{% endfor %}
-  </datalist>
-  <button type="submit">Показать</button>
-  <span class="htmx-indicator muted">загрузка…</span>
-</form>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+  <h1 style="margin: 0;">Аналитика актива</h1>
+  <form action="/ui/asset" method="get"
+        hx-get="/ui/partials/asset" hx-target="#asset-result" hx-push-url="true"
+        style="display: flex; gap: 12px; align-items: center; margin: 0;">
+    <select name="ticker" onchange="this.form.dispatchEvent(new Event('submit', {cancelable: true}))" 
+            style="min-width: 240px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); font-family: var(--font-mono); font-size: 13px; cursor: pointer;">
+      {% for a in assets or [] %}
+      <option value="{{ a.ticker }}" {% if ticker == a.ticker %}selected{% endif %}>{{ a.ticker }} — {{ a.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" style="display: none;">Показать</button>
+    <span class="htmx-indicator muted">загрузка…</span>
+  </form>
+</div>
 
 <div id="asset-result">
   {% if report %}{% include "_asset_result.html" %}{% endif %}
+</div>
+
+<div style="margin-top: 32px;">
+  <h2 style="margin-bottom: 16px;">Граф рынка (Связи и Влияния)</h2>
+  <div hx-get="/ui/partials/graph/market" hx-trigger="load" style="min-height: 400px;">
+    <span class="muted">Загрузка графа рынка...</span>
+  </div>
 </div>
 {% endblock %}

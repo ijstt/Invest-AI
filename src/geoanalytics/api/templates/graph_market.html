@@ -26,50 +26,5 @@
   </div>
 </div>
 
-<script>
-(function () {
-  // Состояние zoom/pan в замыкании страницы (скрипт не свапается) → переживает авто-обновление.
-  const state = { k: 1, tx: 0, ty: 0 };
-  function bind() {
-    const svg = document.getElementById('graph-svg');
-    const g = document.getElementById('graph-zoom');
-    if (!svg || !g || svg.dataset.bound) return;
-    svg.dataset.bound = '1';
-    const apply = () => g.setAttribute('transform',
-      `translate(${state.tx} ${state.ty}) scale(${state.k})`);
-    apply();
-    const vbUnits = (e) => {
-      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
-      return [vb.x + (e.clientX - r.left) / r.width * vb.width,
-              vb.y + (e.clientY - r.top) / r.height * vb.height];
-    };
-    let drag = false, px = 0, py = 0;
-    svg.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const [mx, my] = vbUnits(e);
-      const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      const nk = Math.min(Math.max(state.k * f, 0.3), 6);
-      state.tx = mx - (mx - state.tx) * (nk / state.k);
-      state.ty = my - (my - state.ty) * (nk / state.k);
-      state.k = nk; apply();
-    }, { passive: false });
-    svg.addEventListener('pointerdown', (e) => {
-      drag = true; px = e.clientX; py = e.clientY;
-      svg.style.cursor = 'grabbing'; svg.setPointerCapture(e.pointerId);
-    });
-    svg.addEventListener('pointermove', (e) => {
-      if (!drag) return;
-      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
-      state.tx += (e.clientX - px) / r.width * vb.width;
-      state.ty += (e.clientY - py) / r.height * vb.height;
-      px = e.clientX; py = e.clientY; apply();
-    });
-    const end = () => { drag = false; svg.style.cursor = 'grab'; };
-    svg.addEventListener('pointerup', end);
-    svg.addEventListener('pointercancel', end);
-  }
-  bind();
-  document.body.addEventListener('htmx:afterSettle', bind);
-})();
-</script>
+
 {% endblock %}
