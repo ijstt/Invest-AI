@@ -16,10 +16,10 @@
       "settings": {
         "vnext": [
           {
-            "address": "78.153.149.37",
+            "address": "YOUR-SERVER-IP",
             "port": 55555,
             "users": [
-              { "id": "eab1c54c-51a0-48dd-b506-280bfe364e34", "encryption": "none" }
+              { "id": "YOUR-UUID-HERE" }
             ]
           }
         ]
@@ -30,8 +30,8 @@
         "realitySettings": {
           "serverName": "vkontakte.ru",
           "fingerprint": "chrome",
-          "publicKey": "ZR6CrMGuIBAT21KcPl0uG_jOS-g08lCqvlfpdCARjGM",
-          "shortId": "e26e74",
+          "publicKey": "YOUR-PUBLIC-KEY",
+          "shortId": "YOUR-SHORT-ID",
           "spiderX": "/qo9OnFhTWwwb2A6"
         },
         "xhttpSettings": {
