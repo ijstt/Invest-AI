@@ -23,25 +23,28 @@ log = get_logger("bot")
 _API = "https://api.telegram.org/bot{token}/{method}"
 
 
-def _get_updates(token: str, offset: int | None, timeout: int) -> list[dict]:
+def _get_updates(token: str, offset: int | None, timeout: int,
+                 proxy: str | None = None) -> list[dict]:
     """Long-poll getUpdates: Telegram держит соединение до `timeout` сек, пока нет апдейтов."""
     params: dict = {"timeout": timeout, "allowed_updates": '["message"]'}
     if offset is not None:
         params["offset"] = offset
-    resp = httpx.get(_API.format(token=token, method="getUpdates"),
-                     params=params, timeout=timeout + 10)
+    with httpx.Client(proxy=proxy, timeout=timeout + 10) as client:
+        resp = client.get(_API.format(token=token, method="getUpdates"),
+                          params=params)
     resp.raise_for_status()
     return resp.json().get("result", [])
 
 
-def _drain_offset(token: str) -> int | None:
+def _drain_offset(token: str, proxy: str | None = None) -> int | None:
     """Слить накопленные апдейты при старте, чтобы не отвечать на старые команды (offset)."""
-    updates = _get_updates(token, None, 0)
+    updates = _get_updates(token, None, 0, proxy=proxy)
     return updates[-1]["update_id"] + 1 if updates else None
 
 
 def _handle_update(upd: dict, token: str,
-                   last_seen: dict[str, float], rate_limit: float) -> None:
+                   last_seen: dict[str, float], rate_limit: float,
+                   proxy: str | None = None) -> None:
     """Обработать апдейт: /start-регистрация → авторизация по БД → rate-limit → роутер → ответ.
 
     Авторизация (5b) идёт через таблицу users (`identity`), а не статический allowlist.
@@ -58,13 +61,15 @@ def _handle_update(upd: dict, token: str,
     # /start — регистрация/привязка; bootstrap уже сделал admin'ов разрешёнными.
     if cmd == "start":
         user = identity.register(int(frm.get("id") or chat_id), chat_id, frm.get("username"))
-        send_telegram(token, chat_id, fmt.welcome(user) if user.allowed else fmt.pending())
+        send_telegram(token, chat_id, fmt.welcome(user) if user.allowed else fmt.pending(),
+                      proxy=proxy)
         log.info("bot_start_cmd", chat_id=chat_id, allowed=user.allowed)
         return
 
     user = identity.authorize(chat_id)
     if user is None:
-        send_telegram(token, chat_id, "Нет доступа. Отправьте /start для регистрации.")
+        send_telegram(token, chat_id, "Нет доступа. Отправьте /start для регистрации.",
+                      proxy=proxy)
         log.info("bot_unauthorized", chat_id=chat_id)
         return
 
@@ -77,7 +82,7 @@ def _handle_update(upd: dict, token: str,
     except Exception as exc:  # noqa: BLE001 — ошибка обработки команды не валит демон
         log.error("bot_dispatch_failed", cmd=cmd, error=str(exc))
         reply = "Не удалось обработать команду — попробуйте позже."
-    send_telegram(token, chat_id, reply)
+    send_telegram(token, chat_id, reply, proxy=proxy)
     log.info("bot_reply", chat_id=chat_id, cmd=cmd)
 
 
@@ -91,6 +96,7 @@ def run() -> None:
         return
     timeout = settings.bot_poll_timeout_sec
     rate_limit = settings.bot_rate_limit_sec
+    proxy = settings.telegram_proxy
     last_seen: dict[str, float] = {}     # chat_id → monotonic последней команды
     # 5b: разрешить admin'ов из стартового allowlist настроек (chat_id == user_id в личке).
     try:
@@ -98,24 +104,24 @@ def run() -> None:
     except Exception as exc:  # noqa: BLE001 — без БД bootstrap не валит старт
         n_admins = 0
         log.warning("bot_bootstrap_failed", error=str(exc))
-    log.info("bot_start", admins=n_admins, timeout=timeout)
+    log.info("bot_start", admins=n_admins, timeout=timeout, proxy=bool(proxy))
 
     offset: int | None = None
     try:
-        offset = _drain_offset(token)
+        offset = _drain_offset(token, proxy=proxy)
     except Exception as exc:  # noqa: BLE001 — старт без дренажа допустим
         log.warning("bot_drain_failed", error=str(exc))
 
     try:
         while True:
             try:
-                updates = _get_updates(token, offset, timeout)
+                updates = _get_updates(token, offset, timeout, proxy=proxy)
             except Exception as exc:  # noqa: BLE001 — сеть не валит демон
                 log.warning("bot_poll_failed", error=str(exc))
                 time.sleep(3)
                 continue
             for upd in updates:
                 offset = upd["update_id"] + 1
-                _handle_update(upd, token, last_seen, rate_limit)
+                _handle_update(upd, token, last_seen, rate_limit, proxy=proxy)
     except KeyboardInterrupt:
         log.info("bot_stop")

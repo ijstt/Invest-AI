@@ -100,7 +100,7 @@ cmd_status() {
     echo "  (systemd-службы не установлены)"
   fi
   echo "=== Дашборд /health (на Pi) ==="
-  curl -s --max-time 3 "http://${DB_HOST}:${PORT}/health" || echo "  (недоступен)"
+  curl -s --noproxy "*" --max-time 3 "http://${DB_HOST}:${PORT}/health" || echo "  (недоступен)"
   echo "=== Pi-службы (futrader/depth/dashboard) ==="
   ssh -o BatchMode=yes -o ConnectTimeout=4 "pi@${DB_HOST}" 'export XDG_RUNTIME_DIR=/run/user/$(id -u); for s in geo-futrader geo-depth geo-dashboard; do printf "  %-15s %s\n" "$s" "$(systemctl --user is-active $s)"; done' 2>/dev/null | grep -vE 'rptl.io|valid user' || echo "  (Pi недоступна по ssh)"
   echo

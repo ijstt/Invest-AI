@@ -1,0 +1,15 @@
+[Unit]
+Description=Xray proxy (VLESS-Reality-xHTTP → SOCKS5 :10808 + HTTP :10809)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/happ/bin/core/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

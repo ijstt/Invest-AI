@@ -38,3 +38,5 @@ data/futrader/
 data/library/
 data/eval/
 deploy/pi/xray-config.json
+deploy/vpn/*.json
+graphify-out/
