@@ -270,12 +270,12 @@
         <td class="num {{ 'up' if p.net_qty >= 0 else 'down' }}">{{ "%+d"|format(p.net_qty) }}</td>
         <td class="num">{{ "%.2f"|format(p.avg_price) if p.avg_price is not none else "—" }}</td>
         <td class="num">{{ "%.2f"|format(p.last_price) if p.last_price is not none else "—" }}</td>
-        <td class="num {{ 'up' if (p.unreal_pct or 0) >= 0 else 'down' }}">
-          {% if p.unreal_pct is not none %}{{ "%+.2f"|format(p.unreal_pct) }}%{% else %}—{% endif %}
+        <td class="num {{ 'up' if (p.unreal_pct is defined and p.unreal_pct or 0) >= 0 else 'down' }}">
+          {% if p.unreal_pct is defined and p.unreal_pct is not none %}{{ "%+.2f"|format(p.unreal_pct) }}%{% else %}—{% endif %}
         </td>
         <td class="num {{ 'up' if p.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(p.realized_pnl) }}</td>
         <td>
-          {% if p.duration_bars is not none %}
+          {% if p.duration_bars is defined and p.duration_bars is not none %}
           <div style="display:flex; align-items:center; gap:6px;">
             <div class="hold-bar-wrap">
               <div class="hold-bar-fill" style="width:{{ [p.duration_bars / 12 * 100, 100] | min }}%;"></div>

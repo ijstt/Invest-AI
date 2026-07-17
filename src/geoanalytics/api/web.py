@@ -922,7 +922,7 @@ def asset_page(request: Request, ticker: str | None = None):
 def asset_partial(request: Request, ticker: str = ""):
     """HTMX-фрагмент с отчётом по активу."""
     if not ticker or not ticker.strip():
-        ticker = "IMOEX"
+        return HTMLResponse("<p class=\"muted\">Введите тикер</p>")
     return templates.TemplateResponse(request, "_asset_result.html", _asset_context(ticker))
 
 

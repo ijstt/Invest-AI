@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from geoanalytics.nlp.numeric import _MULT, _to_float
+from geoanalytics.nlp.numeric import MULT, to_float
 
 _SNIPPET_MAX = 160
 _WINDOW = 90                   # символов после метки метрики, где ищем число
@@ -111,7 +111,7 @@ def extract_fundamentals(text: str, *, period: str | None = None) -> list[Fundam
         pe = _PE.search(text)
         if pe:
             facts.append(FundamentalFact(
-                metric="pe", value=_to_float(pe.group(1)), unit="ratio", period=per,
+                metric="pe", value=to_float(pe.group(1)), unit="ratio", period=per,
                 snippet=text[max(0, pe.start() - 10):pe.end()][:_SNIPPET_MAX]))
     return facts
 
@@ -122,13 +122,13 @@ def _match_metric(metric: str, trig: str, window: str,
     if metric in ("eps", "dividend"):
         m = _PER_SHARE.search(window)
         if m:
-            return FundamentalFact(metric=metric, value=_to_float(m.group(1)),
+            return FundamentalFact(metric=metric, value=to_float(m.group(1)),
                                    unit=_currency(m.group(2)), period=period,
                                    snippet=window[:_SNIPPET_MAX])
         return None
     m = _AMOUNT_SCALED.search(window)
     if not m:
         return None
-    value = _to_float(m.group(1)) * _MULT[m.group(2).lower()]
+    value = to_float(m.group(1)) * MULT[m.group(2).lower()]
     return FundamentalFact(metric=metric, value=value, unit=_currency(m.group(3)),
                            period=period, snippet=window[:_SNIPPET_MAX])

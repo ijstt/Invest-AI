@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from geoanalytics.nlp._seqcls import SeqClsAdapter
+from geoanalytics.nlp._seqcls import SeqClsAdapter, is_full_model
 
 _ROOT = Path(__file__).resolve().parent.parent
 
@@ -82,14 +82,14 @@ def test_is_full_model_detects_full_vs_adapter(tmp_path):
     full = tmp_path / "full"
     full.mkdir()
     (full / "config.json").write_text("{}", encoding="utf-8")
-    assert SeqClsAdapter._is_full_model(str(full)) is True
+    assert is_full_model(str(full)) is True
 
     # LoRA-адаптер: есть adapter_config.json.
     adapter = tmp_path / "adapter"
     adapter.mkdir()
     (adapter / "config.json").write_text("{}", encoding="utf-8")
     (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
-    assert SeqClsAdapter._is_full_model(str(adapter)) is False
+    assert is_full_model(str(adapter)) is False
 
     # Пустой/неполный каталог — не полная модель.
-    assert SeqClsAdapter._is_full_model(str(tmp_path / "missing")) is False
+    assert is_full_model(str(tmp_path / "missing")) is False

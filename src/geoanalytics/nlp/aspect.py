@@ -15,11 +15,9 @@ Qwen с промптом «относительно компании X», script
 
 from __future__ import annotations
 
-from functools import lru_cache
-from pathlib import Path
-
 from config.settings import get_settings
 from geoanalytics.core.logging import get_logger
+from geoanalytics.nlp._seqcls import ModelConfig, ModelLoader
 
 log = get_logger("nlp.aspect")
 
@@ -35,32 +33,33 @@ def encode_pair(aspect: str, text: str, max_chars: int = 1000) -> str:
     return f"{aspect}: {text[:max_chars]}"
 
 
-def _load(path: str | None, name: str):
-    """Загрузка SeqClsAdapter с громкой деградацией (как у significance, Б1)."""
-    if not path:
-        return None
-    if not Path(path).exists():
-        log.error(f"{name}_adapter_missing_FALLBACK", path=path)
-        return None
-    try:
-        from geoanalytics.nlp._seqcls import SeqClsAdapter
+_SENT_CFG = ModelConfig(
+    name="aspect_sentiment",
+    err_level="error",
+    loaded_desc="aspect-sentiment: модель",
+    fallback_desc="aspect-sentiment: НЕ ЗАГРУЗИЛСЯ (фолбэк на тональность статьи)",
+    unconfigured_desc="aspect-sentiment: не настроен",
+)
 
-        model = SeqClsAdapter(path)
-        log.info(f"{name}_model_ready", path=path)
-        return model
-    except Exception as exc:  # noqa: BLE001 — конвейер живёт на фолбэке, но громко
-        log.error(f"{name}_model_failed_FALLBACK", error=str(exc))
-        return None
+_SAL_CFG = ModelConfig(
+    name="saliency",
+    err_level="error",
+    loaded_desc="saliency: модель",
+    fallback_desc="saliency: НЕ ЗАГРУЗИЛСЯ (фолбэк на тональность статьи)",
+    unconfigured_desc="saliency: не настроен",
+)
 
 
-@lru_cache
+_SENT_LOADER = ModelLoader(_SENT_CFG, lambda: get_settings().aspect_sentiment_adapter_path, log)
+_SAL_LOADER = ModelLoader(_SAL_CFG, lambda: get_settings().saliency_adapter_path, log)
+
+
 def _get_sentiment_model():
-    return _load(get_settings().aspect_sentiment_adapter_path, "aspect_sentiment")
+    return _SENT_LOADER.get_model()
 
 
-@lru_cache
 def _get_saliency_model():
-    return _load(get_settings().saliency_adapter_path, "saliency")
+    return _SAL_LOADER.get_model()
 
 
 def analyze_pair(aspect: str, text: str) -> tuple[str | None, bool | None]:
@@ -94,18 +93,7 @@ def aspect_name(ticker: str, name: str | None) -> str:
 
 def model_status() -> tuple[str, str]:
     """Статус F1/F2 для health-check: degraded, если настроено, но не загрузилось."""
-    s = get_settings()
-    parts: list[str] = []
-    degraded = False
-    for path, model, label in (
-        (s.aspect_sentiment_adapter_path, _get_sentiment_model(), "aspect-sentiment"),
-        (s.saliency_adapter_path, _get_saliency_model(), "saliency"),
-    ):
-        if not path:
-            parts.append(f"{label}: не настроен")
-        elif model is None:
-            parts.append(f"{label}: НЕ ЗАГРУЗИЛСЯ (фолбэк на тональность статьи)")
-            degraded = True
-        else:
-            parts.append(f"{label}: модель")
-    return ("degraded" if degraded else "ok"), "; ".join(parts)
+    stat_sent, desc_sent = _SENT_LOADER.get_status()
+    stat_sal, desc_sal = _SAL_LOADER.get_status()
+    degraded = (stat_sent == "degraded" or stat_sal == "degraded")
+    return ("degraded" if degraded else "ok"), f"{desc_sent}; {desc_sal}"

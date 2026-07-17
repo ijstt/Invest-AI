@@ -27,7 +27,21 @@ KINDS = (DIVIDEND, KEY_RATE, DEAL_AMOUNT, TARGET_PRICE)
 # пробельные группы тысяч («1 200,5»); \s покрывает nbsp.
 _NUM = r"(\d{1,3}(?:\s\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)"
 
-_MULT = {"тыс": 1e3, "млн": 1e6, "млрд": 1e9, "трлн": 1e12}
+MULT = {"тыс": 1e3, "млн": 1e6, "млрд": 1e9, "трлн": 1e12}
+_MULT = MULT  # Alias for backward compatibility
+
+__all__ = [
+    "MULT",
+    "to_float",
+    "NumericFact",
+    "extract_numbers",
+    "DIVIDEND",
+    "KEY_RATE",
+    "DEAL_AMOUNT",
+    "TARGET_PRICE",
+    "KINDS",
+]
+
 _CUR_SYMBOL = {"$": "USD", "€": "EUR", "₽": "RUB"}
 
 # «дивиденды … 5,19 руб. на акцию» / «дивиденды в размере ₽37,64 на акцию».
@@ -93,8 +107,13 @@ class NumericFact:
     snippet: str
 
 
-def _to_float(raw: str) -> float:
-    return float(raw.replace(" ", "").replace("\xa0", "").replace(",", "."))
+def to_float(raw: str) -> float:
+    return float(re.sub(r"\s+", "", raw).replace(",", "."))
+
+_to_float = to_float  # Alias for backward compatibility
+
+
+
 
 
 def _currency(symbol: str | None, word: str | None) -> str | None:
@@ -130,13 +149,13 @@ def extract_numbers(text: str) -> list[NumericFact]:
     for m in _DIV_RE.finditer(text):
         # Без признака валюты («дивиденды 5 на акцию») — слишком сомнительно.
         if m.group(1) or m.group(3):
-            add(NumericFact(DIVIDEND, _to_float(m.group(2)), "RUB", _snippet(text, m)))
+            add(NumericFact(DIVIDEND, to_float(m.group(2)), "RUB", _snippet(text, m)))
 
     for m in _RATE_RE.finditer(text):
         window = text[max(0, m.start() - _RATE_WINDOW):m.end()]
         if _FORECAST_RE.search(window):
             continue
-        add(NumericFact(KEY_RATE, _to_float(m.group(1)), "pct", _snippet(text, m)))
+        add(NumericFact(KEY_RATE, to_float(m.group(1)), "pct", _snippet(text, m)))
 
     for m in _AMOUNT_RE.finditer(text):
         currency = _currency(m.group(1), m.group(4))
@@ -145,7 +164,7 @@ def extract_numbers(text: str) -> list[NumericFact]:
         window = text[max(0, m.start() - _DEAL_WINDOW):m.start()]
         if not _DEAL_TRIGGER_RE.search(window):
             continue
-        value = _to_float(m.group(2)) * _MULT[m.group(3).lower()]
+        value = to_float(m.group(2)) * MULT[m.group(3).lower()]
         add(NumericFact(DEAL_AMOUNT, value, currency, _snippet(text, m)))
 
     for m in _TARGET_RE.finditer(text):
@@ -157,6 +176,6 @@ def extract_numbers(text: str) -> list[NumericFact]:
         currency = _currency(sym, post)
         if currency is None:  # без признака валюты «таргет 350» — слишком сомнительно
             continue
-        add(NumericFact(TARGET_PRICE, _to_float(num), currency, _snippet(text, m)))
+        add(NumericFact(TARGET_PRICE, to_float(num), currency, _snippet(text, m)))
 
     return out

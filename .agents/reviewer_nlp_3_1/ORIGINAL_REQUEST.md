@@ -1,0 +1,2 @@
+## 2026-07-17T06:17:02Z
+You are Reviewer 1. Check the NLP refactoring in src/geoanalytics/nlp/ (ModelLoader in _seqcls.py, and classify.py, significance.py, temporal.py, aspect.py, sentiment.py, fundamentals.py, numeric.py). Verify correctness, completeness, and interface conformance. Run pytest tests/ to confirm they pass. Write your review report to /home/ijstt/News/.agents/reviewer_nlp_3_1/review.md.

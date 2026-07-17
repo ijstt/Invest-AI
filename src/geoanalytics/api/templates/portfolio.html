@@ -241,6 +241,15 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  {% if correlations %}
+  <div class="panel">
+    <h2>Корреляции холдингов</h2>
+    {% for c in correlations %}
+    <div class="metric"><span class="k">{{ c.pair }}</span><span class="v {{ 'up' if c.r >= 0 else 'down' }}">{{ "%+.2f"|format(c.r) }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 </div>
 <div class="grid" style="margin-top:18px;">

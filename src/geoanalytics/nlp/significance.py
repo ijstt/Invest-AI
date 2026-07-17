@@ -12,15 +12,12 @@
 В M6.5 эту функцию можно заменить/скорректировать обученной моделью, сохранив интерфейс.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
-from functools import lru_cache
-from pathlib import Path
 
 from config.settings import get_settings
 from geoanalytics.core.logging import get_logger
 from geoanalytics.core.types import EventType
+from geoanalytics.nlp._seqcls import ModelConfig, ModelLoader
 
 log = get_logger("nlp.significance")
 
@@ -145,44 +142,37 @@ def validate_cascade(settings=None) -> list[str]:
     return problems
 
 
-@lru_cache
+_CFG = ModelConfig(
+    name="significance",
+    err_level="error",
+    missing_key="significance_adapter_missing_FORMULA_FALLBACK",
+    ready_key="significance_model_ready",
+    failed_key="significance_model_failed_FORMULA_FALLBACK",
+    loaded_desc="модель (дискретные бакеты)",
+    fallback_desc="адаптер настроен, но не загрузился — активна ФОРМУЛА (Б1)",
+    unconfigured_desc="формула (адаптер не настроен)",
+)
+
+_LOADER = ModelLoader(_CFG, lambda: get_settings().significance_adapter_path, log)
+
+
 def _get_model():
     """Дообученный классификатор значимости (M6.5), если задан и грузится; иначе None.
 
-    Б1 (Волна 1): фолбэк модель→формула НЕ тихий. Модель дискретна (0.15/0.5/0.85),
-    формула непрерывна — gate алертов 0.6 откалиброван под модель, и молчаливая подмена
+    Влияет на приоритезацию алертов: ложное срабатывание (модель отвалилась на формулу)
     сдвигает распределение (шторм или тишина алертов). Поэтому сбой загрузки при
     настроенном пути — это ERROR, а health-check (geo health / scheduler) поднимает алерт.
     """
-    path = get_settings().significance_adapter_path
-    if not path:
-        return None
-    if not Path(path).exists():
-        log.error("significance_adapter_missing_FORMULA_FALLBACK", path=path)
-        return None
-    try:
-        from geoanalytics.nlp._seqcls import SeqClsAdapter
-
-        model = SeqClsAdapter(path)
-        log.info("significance_model_ready", path=path)
-        return model
-    except Exception as exc:  # noqa: BLE001 — конвейер выживает на формуле, но громко (Б1)
-        log.error("significance_model_failed_FORMULA_FALLBACK", error=str(exc))
-        return None
+    return _LOADER.get_model()
 
 
 def model_status() -> tuple[str, str]:
-    """Статус значимости для health-check (I4): ("ok"|"degraded", деталь).
+    """Статус F3 для health-check: ok (модель или формула, если не настроена) или
 
     degraded — адаптер настроен, но не загрузился (активна формула: распределение
     значимостей другое, гейт алертов 0.6 не откалиброван под неё — Б1).
     """
-    configured = bool(get_settings().significance_adapter_path)
-    if _get_model() is not None:
-        return "ok", "модель (дискретные бакеты)"
-    if configured:
-        return "degraded", "адаптер настроен, но не загрузился — активна ФОРМУЛА (Б1)"
-    return "ok", "формула (адаптер не настроен)"
+    return _LOADER.get_status()
 
 
 def predict_significance(text: str) -> float | None:

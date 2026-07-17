@@ -28,7 +28,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from geoanalytics.core.logging import get_logger
 from geoanalytics.nlp.fundamentals import FundamentalFact
-from geoanalytics.nlp.numeric import _MULT, _to_float
+from geoanalytics.nlp.numeric import MULT, to_float
 
 log = get_logger("connector.smartlab")
 
@@ -77,7 +77,7 @@ def _is_year(text: str) -> bool:
 def _scale(unit_text: str) -> float:
     """Масштаб денежной единицы из «млрд руб»/«млн руб»/… (по умолчанию 1.0)."""
     low = unit_text.lower()
-    for word, mult in _MULT.items():
+    for word, mult in MULT.items():
         if word in low:
             return mult
     return 1.0
@@ -98,10 +98,10 @@ def _parse_value(raw: str, kind: str, unit_text: str) -> tuple[float, str] | Non
         return None
     try:
         if kind == "pct":
-            return _to_float(raw.replace("%", "")), "pct"
+            return to_float(raw.replace("%", "")), "pct"
         if kind == "ratio":
-            return _to_float(raw.replace("%", "")), "ratio"
-        num = _to_float(raw.replace("%", ""))
+            return to_float(raw.replace("%", "")), "ratio"
+        num = to_float(raw.replace("%", ""))
         if kind == "share":
             return num, _currency(unit_text)
         # money

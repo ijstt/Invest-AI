@@ -1,0 +1,84 @@
+diff --git a/src/geoanalytics/api/templates/_track2.html b/src/geoanalytics/api/templates/_track2.html
+index a1b2c3d..e5f6g7h 100644
+--- a/src/geoanalytics/api/templates/_track2.html
++++ b/src/geoanalytics/api/templates/_track2.html
+@@ -270,9 +270,9 @@
+         <td class="num {{ 'up' if p.net_qty >= 0 else 'down' }}">{{ "%+d"|format(p.net_qty) }}</td>
+         <td class="num">{{ "%.2f"|format(p.avg_price) if p.avg_price is not none else "—" }}</td>
+         <td class="num">{{ "%.2f"|format(p.last_price) if p.last_price is not none else "—" }}</td>
+-        <td class="num {{ 'up' if (p.unreal_pct or 0) >= 0 else 'down' }}">
+-          {% if p.unreal_pct is not none %}{{ "%+.2f"|format(p.unreal_pct) }}%{% else %}—{% endif %}
++        <td class="num {{ 'up' if (p.unreal_pct is defined and p.unreal_pct or 0) >= 0 else 'down' }}">
++          {% if p.unreal_pct is defined and p.unreal_pct is not none %}{{ "%+.2f"|format(p.unreal_pct) }}%{% else %}—{% endif %}
+         </td>
+         <td class="num {{ 'up' if p.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(p.realized_pnl) }}</td>
+         <td>
+-          {% if p.duration_bars is not none %}
++          {% if p.duration_bars is defined and p.duration_bars is not none %}
+           <div style="display:flex; align-items:center; gap:6px;">
+             <div class="hold-bar-wrap">
+               <div class="hold-bar-fill" style="width:{{ [p.duration_bars / 12 * 100, 100] | min }}%;"></div>
+diff --git a/src/geoanalytics/api/templates/asset.html b/src/geoanalytics/api/templates/asset.html
+index 1111111..2222222 100644
+--- a/src/geoanalytics/api/templates/asset.html
++++ b/src/geoanalytics/api/templates/asset.html
+@@ -6,10 +6,11 @@
+   <form action="/ui/asset" method="get"
+         hx-get="/ui/partials/asset" hx-target="#asset-result" hx-push-url="true"
+         style="display: flex; gap: 12px; align-items: center; margin: 0;">
+-    <select name="ticker" onchange="this.form.dispatchEvent(new Event('submit', {cancelable: true}))" 
+-            style="min-width: 240px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); font-family: var(--font-mono); font-size: 13px; cursor: pointer;">
+-      {% for a in assets or [] %}
+-      <option value="{{ a.ticker }}" {% if ticker == a.ticker %}selected{% endif %}>{{ a.ticker }} — {{ a.name }}</option>
+-      {% endfor %}
+-    </select>
+-    <button type="submit" style="display: none;">Показать</button>
++    <input type="text" name="ticker" placeholder="Тикер, напр. IMOEX" list="tickers"
++           value="{{ ticker or '' }}" autocomplete="off" autofocus
++           style="min-width: 240px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); font-family: var(--font-mono); font-size: 13px;">
++    <datalist id="tickers">
++      {% for a in assets or [] %}<option value="{{ a.ticker }}">{{ a.name }}</option>{% endfor %}
++    </datalist>
++    <button type="submit" style="padding: 10px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); font-size: 13px; cursor: pointer;">Показать</button>
+     <span class="htmx-indicator muted">загрузка…</span>
+   </form>
+diff --git a/src/geoanalytics/api/templates/portfolio.html b/src/geoanalytics/api/templates/portfolio.html
+index 3333333..4444444 100644
+--- a/src/geoanalytics/api/templates/portfolio.html
++++ b/src/geoanalytics/api/templates/portfolio.html
+@@ -242,5 +242,14 @@
+   </div>
+   {% endif %}
++
++  {% if correlations %}
++  <div class="panel">
++    <h2>Корреляции холдингов</h2>
++    {% for c in correlations %}
++    <div class="metric"><span class="k">{{ c.pair }}</span><span class="v {{ 'up' if c.r >= 0 else 'down' }}">{{ "%+.2f"|format(c.r) }}</span></div>
++    {% endfor %}
++  </div>
++  {% endif %}
+ </div>
+ </div>
+diff --git a/src/geoanalytics/api/web.py b/src/geoanalytics/api/web.py
+index 5555555..6666666 100644
+--- a/src/geoanalytics/api/web.py
++++ b/src/geoanalytics/api/web.py
+@@ -922,5 +922,5 @@
+ def asset_partial(request: Request, ticker: str = ""):
+     """HTMX-фрагмент с отчётом по активу."""
+     if not ticker or not ticker.strip():
+-        ticker = "IMOEX"
++        return HTMLResponse("<p class=\"muted\">Введите тикер</p>")
+     return templates.TemplateResponse(request, "_asset_result.html", _asset_context(ticker))
+diff --git a/tests/test_web.py b/tests/test_web.py
+index 7777777..8888888 100644
+--- a/tests/test_web.py
++++ b/tests/test_web.py
+@@ -346,5 +346,6 @@
+         "value_chart": sparkline([100000.0, 101000.0, 99500.0, 102500.0]),
+         "positions": [{"asset_code": "BR", "interval": "1h", "source": "rsi", "net_qty": 1,
+-                       "avg_price": 70.5, "last_price": 71.2, "realized_pnl": 0.0}],
++                       "avg_price": 70.5, "last_price": 71.2, "realized_pnl": 0.0,
++                       "unreal_pct": 0.99, "duration_bars": 2}],
+         "trades": [{"ts": datetime(2026, 6, 20, 14, 0), "asset_code": "BR", "source": "rsi",

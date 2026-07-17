@@ -17,6 +17,7 @@ from pathlib import Path
 from config.settings import get_settings
 from geoanalytics.core.logging import get_logger
 from geoanalytics.core.types import Sentiment
+from geoanalytics.nlp._seqcls import is_full_model
 
 log = get_logger("nlp.sentiment")
 
@@ -61,6 +62,12 @@ class _RubertSentiment:
 
     # Родной порядок меток базы blanchefort/rubert-base-cased-sentiment (без адаптера).
     _BASE_LABELS = [Sentiment.NEUTRAL, Sentiment.POSITIVE, Sentiment.NEGATIVE]
+
+    @staticmethod
+    def _is_full_model(path: str) -> bool:
+        """Каталог — полностью дообученная модель (config.json без adapter_config.json),
+        а не PEFT-адаптер (adapter_config.json)."""
+        return is_full_model(path)
 
     def __init__(self, model_name: str, adapter_path: str | None = None) -> None:
         import torch
@@ -113,13 +120,6 @@ class _RubertSentiment:
         self._model.eval()
 
     @staticmethod
-    def _is_full_model(path: str) -> bool:
-        """Каталог — полностью дообученная модель (config.json без adapter_config.json),
-        а не PEFT-адаптер (adapter_config.json)."""
-        p = Path(path)
-        return (p / "config.json").exists() and not (p / "adapter_config.json").exists()
-
-    @staticmethod
     def _load_adapter_labels(adapter_path: str) -> list[Sentiment]:
         """Читает порядок строковых меток из labels.json адаптера → список Sentiment."""
         import json
@@ -143,28 +143,37 @@ class _RubertSentiment:
 
 @lru_cache
 def _get_model() -> _RubertSentiment | None:
-    settings = get_settings()
-    model_name = settings.sentiment_model
-    adapter = settings.sentiment_adapter_path
-    if adapter and not Path(adapter).exists():
-        log.warning("sentiment_adapter_missing", path=adapter)
-        adapter = None
     try:
+        settings = get_settings()
+        model_name = getattr(settings, "sentiment_model", None)
+        adapter = getattr(settings, "sentiment_adapter_path", None)
+        if adapter:
+            try:
+                if not Path(adapter).exists():
+                    log.warning("sentiment_adapter_missing", path=adapter)
+                    adapter = None
+            except Exception as e:
+                log.warning("sentiment_adapter_path_invalid", error=str(e))
+                adapter = None
+        if not model_name:
+            raise ValueError("sentiment_model setting is missing or empty")
         model = _RubertSentiment(model_name, adapter)
         log.info("sentiment_ready", backend="rubert", model=model_name, adapter=bool(adapter))
         return model
     except Exception as exc:  # noqa: BLE001 — модель/адаптер опциональны, есть фолбэк
         # Если не удалось именно с адаптером — пробуем базовую модель без него,
         # прежде чем падать в лексиконный фолбэк.
-        if adapter:
-            log.warning("sentiment_adapter_failed_base", error=str(exc))
-            try:
+        try:
+            s = get_settings()
+            model_name = getattr(s, "sentiment_model", None)
+            if model_name:
+                log.warning("sentiment_adapter_failed_base", error=str(exc))
                 model = _RubertSentiment(model_name, None)
                 log.info("sentiment_ready", backend="rubert", model=model_name, adapter=False)
                 return model
-            except Exception as exc2:  # noqa: BLE001
-                log.warning("sentiment_fallback_to_lexicon", error=str(exc2))
-                return None
+        except Exception as exc2:  # noqa: BLE001
+            log.warning("sentiment_fallback_to_lexicon", error=str(exc2))
+            return None
         log.warning("sentiment_fallback_to_lexicon", error=str(exc))
         return None
 
@@ -175,8 +184,14 @@ def model_status() -> tuple[str, str]:
     degraded — каскад работает не тем уровнем, под который откалиброваны потребители:
     лексиконный фолбэк вместо модели или база без настроенного адаптера.
     """
-    configured = bool(get_settings().sentiment_adapter_path)
-    model = _get_model()
+    try:
+        configured = bool(get_settings().sentiment_adapter_path)
+    except Exception:
+        configured = False
+    try:
+        model = _get_model()
+    except Exception:
+        model = None
     if model is None:
         return "degraded", "лексиконный фолбэк (модель не загрузилась)"
     if configured and not model.adapter_active:
@@ -188,7 +203,11 @@ def analyze(text: str) -> tuple[Sentiment, float]:
     """Тональность текста: (метка, score ∈ [-1, 1])."""
     if not text.strip():
         return Sentiment.NEUTRAL, 0.0
-    model = _get_model()
+    try:
+        model = _get_model()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("sentiment_failed_fallback", error=str(exc))
+        return _lexicon_sentiment(text)
     if model is None:
         return _lexicon_sentiment(text)
     try:

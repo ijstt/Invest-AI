@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
-from functools import lru_cache
-from pathlib import Path
 
 from config.settings import get_settings
 from geoanalytics.core.logging import get_logger
+from geoanalytics.nlp._seqcls import ModelConfig, ModelLoader
 
 log = get_logger("nlp.temporal")
 
@@ -110,43 +109,38 @@ def anchor_event_date(dates: list[date], published: date,
     return None
 
 
-@lru_cache(maxsize=1)
+_CFG = ModelConfig(
+    name="temporal",
+    err_level="error",
+    missing_key="temporal_adapter_missing_FALLBACK",
+    ready_key="temporal_model_ready",
+    failed_key="temporal_model_load_failed_FALLBACK",
+    loaded_desc="temporal: модель",
+    fallback_desc="temporal: НЕ ЗАГРУЗИЛСЯ (статус/дата события NULL)",
+    unconfigured_desc="temporal: не настроен (статус/дата события NULL)",
+)
+
+_LOADER = ModelLoader(_CFG, lambda: get_settings().temporal_adapter_path, log)
+
+
 def _model():
     """SeqClsAdapter temporal-классификатора; None — фолбэк (статус неизвестен)."""
-    path = get_settings().temporal_adapter_path
-    if not path:
-        return None
-    if not Path(path).exists():
-        log.error("temporal_adapter_missing_FALLBACK", path=path)
-        return None
-    try:
-        from geoanalytics.nlp._seqcls import SeqClsAdapter
-
-        model = SeqClsAdapter(path)
-        log.info("temporal_model_ready", path=path)
-        return model
-    except Exception as exc:  # noqa: BLE001 — деградация громкая, но не фатальная
-        log.error("temporal_model_load_failed_FALLBACK", error=str(exc))
-        return None
+    return _LOADER.get_model()
 
 
 def classify_temporal(text: str) -> str | None:
-    """Временной статус текста (past/future/forecast/none); None — модели нет."""
-    model = _model()
-    if model is None or not text:
-        return None
-    label = model.predict_label(text)
-    return label if label in LABELS else None
+    clf = _model()
+    if clf is not None:
+        try:
+            return clf.predict_label(text)
+        except Exception as exc:  # noqa: BLE001
+            log.error("temporal_predict_failed_FALLBACK", error=str(exc))
+    return None
 
 
 def model_status() -> tuple[str, str]:
     """Статус F3 для health-check: degraded, если настроено, но не загрузилось."""
-    path = get_settings().temporal_adapter_path
-    if not path:
-        return "ok", "temporal: не настроен (статус/дата события NULL)"
-    if _model() is None:
-        return "degraded", "temporal: НЕ ЗАГРУЗИЛСЯ (статус/дата события NULL)"
-    return "ok", "temporal: модель"
+    return _LOADER.get_status()
 
 
 def temporal_anchor(text: str, published: date) -> tuple[str | None, date | None]:

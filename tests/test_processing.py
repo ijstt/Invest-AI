@@ -328,3 +328,167 @@ def test_store_forecasts_noop_without_assets():
     facts = [NumericFact(TARGET_PRICE, 350.0, "RUB", "x")]
     assert _store_forecasts(sess, 7, facts, [], None, "SberInvestments") == 0
     assert sess.calls == []
+
+
+def test_paginate_query_standard(monkeypatch):
+    import contextlib
+    from geoanalytics.processing.common import paginate_query
+
+    sessions = []
+
+    class MockSession:
+        def __init__(self):
+            self.rolled_back = False
+            self.committed = False
+            self.closed = False
+            sessions.append(self)
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def commit(self):
+            self.committed = True
+
+        def close(self):
+            self.closed = True
+
+    @contextlib.contextmanager
+    def mock_session_scope():
+        sess = MockSession()
+        try:
+            yield sess
+            sess.commit()
+        except Exception:
+            sess.rollback()
+            raise
+        finally:
+            sess.close()
+
+    monkeypatch.setattr("geoanalytics.processing.common.session_scope", mock_session_scope)
+
+    # Mock fetch function
+    data = list(range(10))
+    def fetch_fn(session, offset, take):
+        return data[offset:offset+take]
+
+    # Run generator to completion
+    results = list(paginate_query(fetch_fn, batch_size=3))
+    
+    assert len(results) == 4  # 0-2, 3-5, 6-8, 9
+    assert len(sessions) == 4
+    for s in sessions:
+        assert s.committed is True
+        assert s.rolled_back is False
+        assert s.closed is True
+
+
+def test_paginate_query_generator_exit(monkeypatch):
+    import contextlib
+    from geoanalytics.processing.common import paginate_query
+
+    sessions = []
+
+    class MockSession:
+        def __init__(self):
+            self.rolled_back = False
+            self.committed = False
+            self.closed = False
+            sessions.append(self)
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def commit(self):
+            self.committed = True
+
+        def close(self):
+            self.closed = True
+
+    @contextlib.contextmanager
+    def mock_session_scope():
+        sess = MockSession()
+        try:
+            yield sess
+            sess.commit()
+        except Exception:
+            sess.rollback()
+            raise
+        finally:
+            sess.close()
+
+    monkeypatch.setattr("geoanalytics.processing.common.session_scope", mock_session_scope)
+
+    data = list(range(10))
+    def fetch_fn(session, offset, take):
+        return data[offset:offset+take]
+
+    gen = paginate_query(fetch_fn, batch_size=3)
+    sess1, batch1 = next(gen)
+    # Break early from generator (simulates exception/break in caller's loop)
+    # Closing the generator will raise GeneratorExit at the yield statement.
+    gen.close()
+
+    assert len(sessions) == 1
+    assert sessions[0].rolled_back is True
+
+
+def test_paginate_query_custom_exception(monkeypatch):
+    import contextlib
+    from geoanalytics.processing.common import paginate_query
+
+    sessions = []
+
+    class MockSession:
+        def __init__(self):
+            self.rolled_back = False
+            self.committed = False
+            self.closed = False
+            sessions.append(self)
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def commit(self):
+            self.committed = True
+
+        def close(self):
+            self.closed = True
+
+    @contextlib.contextmanager
+    def mock_session_scope():
+        sess = MockSession()
+        try:
+            yield sess
+            sess.commit()
+        except Exception:
+            sess.rollback()
+            raise
+        finally:
+            sess.close()
+
+    monkeypatch.setattr("geoanalytics.processing.common.session_scope", mock_session_scope)
+
+    data = list(range(10))
+    def fetch_fn(session, offset, take):
+        return data[offset:offset+take]
+
+    gen = paginate_query(fetch_fn, batch_size=3)
+    sess1, batch1 = next(gen)
+
+    class CustomException(Exception):
+        pass
+
+    with pytest.raises(CustomException):
+        for sess, batch in gen:
+            raise CustomException("Oops")
+
+    gen.close()
+
+    # The exception happened during yield inside generator, so it raises BaseException
+    # (since Exception inherits from BaseException) inside paginate_query.
+    # That block calls session.rollback() and reraises.
+    assert len(sessions) == 2  # first session for next(), second session for the loop
+    assert sessions[0].committed is True
+    assert sessions[1].rolled_back is True
+
+
