@@ -10,7 +10,7 @@ Environment=PYTHONPATH=%h/News
 Environment=GEO_DB_HOST=127.0.0.1
 # Ollama (Qwen для ask/нарративов) живёт на ноуте; когда ноут выключен — LLM-фичи дашборда
 # деградируют (read-only/числовые страницы работают; advisory-lock/фолбэк отрабатывает недоступность).
-Environment=GEO_OLLAMA_HOST=http://192.168.0.196:11434
+Environment=GEO_OLLAMA_HOST=http://192.168.0.13:11434
 # 0.0.0.0 → дашборд доступен по LAN (http://192.168.0.114:8800/) даже когда ноут выключен.
 ExecStart=%h/News/.venv/bin/geo serve --host 0.0.0.0 --port 8800
 MemoryAccounting=yes

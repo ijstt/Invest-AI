@@ -1,21 +1,36 @@
-from datetime import UTC, datetime, timedelta
+"""HTMX/Jinja router for asset reports, charts, and technical indicators."""
+
+from __future__ import annotations
+
 import bisect
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
-from geoanalytics.api import web
-from geoanalytics.storage.db import session_scope
-from geoanalytics.storage.models import Asset, Article, ArticleEntity, Event, EventImpact
-from geoanalytics.core.types import EntityType
-from geoanalytics.analytics.prices import ohlcv_series, asset_indicators, apply_live_last
+from geoanalytics.analytics.indicators import bollinger, sma
+from geoanalytics.analytics.prices import apply_live_last, asset_indicators, ohlcv_series
 from geoanalytics.analytics.resample import resample_ohlcv
-from geoanalytics.analytics.indicators import sma, bollinger
-from geoanalytics.api.charts import candles, sparkline, volume_bars, rsi_panel, date_labels, sentiment_strip
-
-from geoanalytics.query.assets_feed import list_assets
-from geoanalytics.query.asset_report import build_report
+from geoanalytics.api import web
+from geoanalytics.api.charts import (
+    candles,
+    date_labels,
+    rsi_panel,
+    sentiment_strip,
+    sparkline,
+    volume_bars,
+)
+from geoanalytics.core.types import EntityType
+from geoanalytics.storage.db import session_scope
+from geoanalytics.storage.models import (
+    Article,
+    ArticleEntity,
+    Asset,
+    Event,
+    EventImpact,
+)
 
 router = APIRouter()
 
@@ -45,7 +60,7 @@ def _sentiment_cells(ticker: str, days: int = 90) -> list[dict]:
                    Article.published_at >= since,
                    Article.sentiment_score.is_not(None))
         ).all()
-    by_day = defaultdict(list)
+    by_day: dict = defaultdict(list)
     for pub, score in rows:
         by_day[pub.date()].append(float(score))
     return [{"label": d.strftime("%d.%m"), "score": sum(v) / len(v)}
@@ -53,7 +68,13 @@ def _sentiment_cells(ticker: str, days: int = 90) -> list[dict]:
 
 
 def _price_overlays(closes: list[float]) -> list[dict]:
-    """Наложения на цену: линии SMA20/50/200 и полосы Bollinger (C1)."""
+    """Наложения на цену: линии SMA20/50/200 и полосы Bollinger (C1).
+
+    Каждый ряд выровнен по барам — значение на баре i считается по префиксу `closes[:i+1]`;
+    в прогреве индикатора (мало данных) → None, такие точки график пропускает. Цвета/штрих
+    заданы тут (charts.py остаётся чисто-геометрическим). Ряды целиком из None (короткий
+    диапазон) график отбросит сам.
+    """
     if len(closes) < 20:
         return []
 
@@ -74,7 +95,11 @@ def _price_overlays(closes: list[float]) -> list[dict]:
 
 
 def _chart_event_markers(ticker: str, bar_dates: list, limit: int = 12) -> list[dict]:
-    """Маркеры событий влияния для графика актива (#5): событие → ближайший бар."""
+    """Маркеры событий влияния для графика актива (#5): событие → ближайший бар.
+
+    Берёт значимые EventImpact актива в окне графика и мапит дату события (occurred_at)
+    на индекс ближайшего бара (≤ даты). Возвращает вход для `charts._event_markers`.
+    """
     if not bar_dates:
         return []
     bar_days = [d.date() if hasattr(d, "date") else d for d in bar_dates]
@@ -106,7 +131,12 @@ def _chart_event_markers(ticker: str, bar_dates: list, limit: int = 12) -> list[
 
 def _chart_context(ticker: str, rng: str = "6m", period: str = "D", kind: str = "line",
                    ovl: bool = True, vol: bool = True, osc: bool = True) -> dict:
-    """Данные графика по выбранным диапазону/периоду/типу (для HTMX-партиала)."""
+    """Данные графика по выбранным диапазону/периоду/типу (для HTMX-партиала).
+
+    Помимо основного графика готовит сабпанели: объём (C2) и осциллятор RSI (C3). Флаги
+    `ovl`/`vol`/`osc` включают/выключают оверлеи SMA-Bollinger и сабпанели — их можно
+    отключить тумблерами на дашборде (расчёт пропускается, если выключено).
+    """
     rows = web._asset_ohlcv(ticker, web._CHART_RANGES.get(rng))
     if period in ("W", "M"):
         rows = resample_ohlcv(rows, period)
@@ -131,13 +161,18 @@ def _chart_context(ticker: str, rng: str = "6m", period: str = "D", kind: str = 
 
 
 def _indicators_context(ticker: str, period: str = "D") -> dict:
-    """Индикаторы актива на выбранном таймфрейме D/W/M (A7) — для панели и HTMX-тумблера."""
+    """Индикаторы актива на выбранном таймфрейме D/W/M (A7) — для панели и HTMX-тумблера.
+
+    Считает ТОЛЬКО индикаторы (без пересборки отчёта/LLM), чтобы переключение Д/Н/М
+    было дешёвым. На W/M история сжимается в `asset_indicators`.
+    """
     period = period if period in ("D", "W", "M") else "D"
     with session_scope() as session:
         asset = session.scalars(
             select(Asset).where(Asset.ticker == ticker.upper())
         ).first()
         ind = asset_indicators(session, asset.id, period=period).as_dict() if asset else {}
+        # A1: на дневном таймфрейме показываем живой LAST (единая цена с портфелем/дашбордом).
         if asset:
             apply_live_last(session, ticker, ind, period)
     return {"ticker": ticker.upper(), "indicators": ind, "ind_period": period}
@@ -145,12 +180,15 @@ def _indicators_context(ticker: str, period: str = "D") -> dict:
 
 def _asset_context(ticker: str) -> dict:
     report = web.build_report(ticker, rebuild=False, use_llm=False)
+    # Начальный график (линия, 6м) с оверлеями и сабпанелями объёма/RSI; свечи и другие
+    # таймфреймы переключает HTMX-партиал через тот же `_chart_context`.
     ctx = web._chart_context(ticker) if report.found else {
         "chart": None, "chart_kind": "line", "chart_range": "6m", "chart_period": "D",
         "ranges": list(web._CHART_RANGES), "volpanel": None, "oscpanel": None,
         "chart_ovl": 1, "chart_vol": 1, "chart_osc": 1}
     sentiment = sentiment_strip(web._sentiment_cells(ticker)) if report.found else None
     factor_trend = web._factor_trend(ticker) if report.found else None
+    # Индикаторы дублируем в ctx с таймфреймом по умолчанию (D) — панель умеет Д/Н/М.
     return {"report": report, "ticker": ticker.upper(), "sentiment": sentiment,
             "factor_trend": factor_trend,
             "indicators": report.indicators, "ind_period": "D", **ctx}
@@ -158,6 +196,8 @@ def _asset_context(ticker: str) -> dict:
 
 def _factor_trend(ticker: str):
     """L5: спарклайн композитного факторного z-скора во времени (None, если <2 дней истории)."""
+    from datetime import datetime
+
     from geoanalytics.storage.repositories import FactorScoreRepository
     with session_scope() as session:
         asset = session.scalars(select(Asset).where(Asset.ticker == ticker.upper())).first()

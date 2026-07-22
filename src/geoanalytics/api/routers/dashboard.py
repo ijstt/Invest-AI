@@ -1,10 +1,12 @@
+"""HTMX/Jinja router for market dashboard, news feed, status, and Q&A."""
+
+from __future__ import annotations
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from geoanalytics.api import web
 from geoanalytics.storage.db import session_scope
-from geoanalytics.query.news_summary import build_snapshot, recent_headlines
-from geoanalytics.query.ask import answer as ask_answer
 
 router = APIRouter()
 
