@@ -1,35 +1,58 @@
-# Python
+# Python & Build Artifacts
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
 .venv/
 venv/
+ENV/
+
+# Testing, Coverage & Quality Tools (CI/CD)
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+nosetests.xml
+junit-*.xml
 
-# Окружение и секреты
+# Environment & Secrets Security
 .env
 .env.local
+.env.*
+!.env.example
 
-# Данные и кэш моделей
+# Data, Models & Heavy Files
 data/
 !data/.gitkeep
-*.sqlite
-*.duckdb
-*.gguf                 # веса локального LLM (qwen2.5-7b ~4.6 ГБ) — не в репозиторий
-
-# IDE
-.idea/
-.vscode/
-
-# Логи
-*.log
-
-# Модели GGUF (скачиваются отдельно)
 models/*.gguf
 models/Modelfile*
+*.sqlite
+*.duckdb
+*.gguf
 
-# Датасеты и кэши (скачиваются/генерируются отдельно)
+# Specific data paths
 data/*.jsonl
 data/*.session
 data/adapters/
@@ -37,6 +60,22 @@ data/fastembed_cache/
 data/futrader/
 data/library/
 data/eval/
+
+# Deployment & Local Configs
 deploy/pi/xray-config.json
 deploy/vpn/*.json
+docker-compose.override.yml
+
+# Logs & Output
+*.log
+logs/
 graphify-out/
+
+# IDE & OS Clutter
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
