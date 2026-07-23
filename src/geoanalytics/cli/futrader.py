@@ -468,17 +468,22 @@ def futures_intraday_resume(
     account: str = typer.Option("demo", "--account", help="Бумажный счёт."),
 ) -> None:
     """Пул 9/B: снять kill-switch вручную (после разбора причины остановки)."""
+    from datetime import UTC, datetime
     from geoanalytics.storage.db import session_scope
-    from geoanalytics.storage.repositories import FuturesRiskStateRepository
+    from geoanalytics.storage.repositories import FuturesPaperRepository, FuturesRiskStateRepository
 
     with session_scope() as session:
         repo = FuturesRiskStateRepository(session)
+        paper_repo = FuturesPaperRepository(session)
         was = repo.is_halted(account)
-        repo.set_state(account, halted=False, reason=None)
+        curve = paper_repo.equity_curve(account)
+        current_eq = curve[-1].equity if curve else 100_000.0
+        now = datetime.now(UTC)
+        repo.set_state(account, halted=False, reason=None, resumed_at=now, baseline_equity=current_eq)
     if was:
         console.print(f"[green]✓[/] Kill-switch снят для [{account}] — торговля возобновлена.")
     else:
-        console.print(f"[dim]Счёт [{account}] и так не был остановлен.[/]")
+        console.print(f"[dim]Счёт [{account}] и так не был остановлен (baseline_equity={current_eq:,.0f}₽).[/]")
 
 
 @futures_intraday_app.command("paper-status")

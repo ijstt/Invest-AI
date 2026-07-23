@@ -49,6 +49,7 @@ class QualityGate:
     min_sharpe: float = 0.0
     min_taken: int = 20
     min_samples: int = 120
+    allow_fallback: bool = True
 
 
 def _bar_index(bars, ts) -> int | None:
@@ -225,9 +226,16 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
         _ensure_spec(session, spec_cache, p.asset_code)
     realized_total, unrealized_now = mark_to_market(positions_now, spec_cache)
     equity = starting_cash + realized_total + unrealized_now
-    # Просадка относительно ПИКА (история + текущая точка) → жёсткий брейкер + плавный де-риск.
     curve = repo.equity_curve(account)
-    peak = max([e.peak_equity for e in curve] + [equity], default=equity)
+
+    risk_repo = FuturesRiskStateRepository(session)
+    st = risk_repo.get(account)
+    persisted_halt = bool(st and st.halted)
+    resumed_at = getattr(st, "resumed_at", None) if st else None
+
+    # Просадка относительно ПИКА (история после resumed_at + текущая точка) → брейкер + де-риск.
+    valid_all_curve = [e for e in curve if not resumed_at or e.ts >= resumed_at]
+    peak = max([e.peak_equity for e in valid_all_curve] + [equity], default=equity)
     drawdown_pct = (peak - equity) / peak * 100.0 if peak > 0 else 0.0
     margin_used = portfolio_margin_used(positions_now, spec_cache)
     res.drawdown_pct = round(drawdown_pct, 2)
@@ -245,12 +253,10 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
     exposure_map = exposure_by_code(positions_now, spec_cache)
 
     # KILL-SWITCH (B). ЛАТЧИНГ только на событие УБЫТКА (дневной лимит) — нужен ручной resume,
-    # чтобы человек разобрал причину. Структурную сверх-экспозицию (брутто-маржа) гасим ТРАНЗИЕНТНО:
-    # блок входов на цикл, само снимается при делеверидже — без застревания в безоператорном режиме.
-    risk_repo = FuturesRiskStateRepository(session)
-    persisted_halt = risk_repo.is_halted(account)
+    # чтобы человек разобрал причину.
     today = datetime.now(UTC).date()
-    day_peak = max([e.equity for e in curve if e.ts.date() == today] + [equity], default=equity)
+    valid_today_curve = [e for e in curve if e.ts.date() == today and (not resumed_at or e.ts >= resumed_at)]
+    day_peak = max([e.equity for e in valid_today_curve] + [equity], default=equity)
     if not persisted_halt and daily_loss_breached(
             day_peak, equity, max_daily_loss_pct=limits.max_daily_loss_pct):
         persisted_halt = True
@@ -288,8 +294,10 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
                     barrier_exit=barrier_exit, min_edge_cost_mult=min_edge_cost_mult)
 
     qualified: list[str] = []
+    champs_by_strat: dict = {}
     for strat in SIGNAL_FNS:
         champ = reg.champion(source=strat, asset_code=None, interval=interval)
+        champs_by_strat[strat] = champ
         if not passes_gate(champ, gate):
             res.skipped_gate += 1
             continue
@@ -298,6 +306,30 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
             res.skipped_gate += 1
             continue
         qualified.append(strat)
+
+    # Fallback: Если ВСЕ стратегии отсечены жестким гейтом, но включен allow_fallback —
+    # берём лучшую стратегию по Sharpe с редуцированным риском (консервативный полу-риск)
+    if not qualified and getattr(gate, "allow_fallback", False) and champs_by_strat:
+        best_strat = None
+        best_sharpe = -999.0
+        for strat, champ in champs_by_strat.items():
+            if champ and (champ.n_samples or 0) >= max(10, int(gate.min_samples / 2)):
+                sh = champ.sharpe if champ.sharpe is not None else -1.0
+                if sh > best_sharpe:
+                    best_sharpe = sh
+                    best_strat = strat
+        if best_strat:
+            model = load_policy(None, best_strat)
+            if model is not None:
+                qualified.append(best_strat)
+                ctx.risk_scale *= 0.5  # редуцируем целевой риск для фоллбэка
+                log.info("paper_fallback_qualified", strategy=best_strat, sharpe=best_sharpe)
+
+    for strat in qualified:
+        champ = champs_by_strat.get(strat)
+        model = load_policy(None, strat)
+        if model is None or champ is None:
+            continue
         for tk in tickers:
             try:
                 _step_instrument(ctx, model, champ, tk, strat, res)

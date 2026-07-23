@@ -717,6 +717,7 @@ class FuturesPaperRepository:
                              ("equity", FuturesPaperEquity), ("trades", FuturesPaperTrade)):
             res = self.session.execute(delete(model).where(model.account == account))
             out[label] = res.rowcount or 0
+        FuturesRiskStateRepository(self.session).set_state(account, halted=False, reason=None)
         return out
 
 
@@ -733,15 +734,39 @@ class FuturesRiskStateRepository:
         st = self.get(account)
         return bool(st and st.halted)
 
-    def set_state(self, account: str, *, halted: bool, reason: str | None) -> None:
+    def set_state(self, account: str, *, halted: bool, reason: str | None,
+                  resumed_at: datetime | None = None,
+                  baseline_equity: float | None = None) -> None:
         """Идемпотентно выставить состояние kill-switch счёта (upsert по account)."""
+        now = datetime.now(UTC)
+        if not halted and resumed_at is None:
+            resumed_at = now
+
+        values = {
+            "account": account,
+            "halted": halted,
+            "reason": reason,
+            "updated_at": now,
+        }
+        set_dict = {
+            "halted": halted,
+            "reason": reason,
+            "updated_at": now,
+        }
+
+        if resumed_at is not None:
+            values["resumed_at"] = resumed_at
+            set_dict["resumed_at"] = resumed_at
+        if baseline_equity is not None:
+            values["baseline_equity"] = baseline_equity
+            set_dict["baseline_equity"] = baseline_equity
+
         stmt = (
             pg_insert(FuturesRiskState)
-            .values(account=account, halted=halted, reason=reason,
-                    updated_at=datetime.now(UTC))
+            .values(**values)
             .on_conflict_do_update(
                 index_elements=["account"],
-                set_={"halted": halted, "reason": reason, "updated_at": datetime.now(UTC)})
+                set_=set_dict)
         )
         self.session.execute(stmt)
 

@@ -85,12 +85,12 @@ class _FakeSession:
         return _FakeResult(self._counts.pop(0))
 
 
-def test_reset_account_clears_three_paper_tables():
+def test_reset_account_clears_paper_tables_and_risk_state():
     from geoanalytics.storage.repositories import FuturesPaperRepository
 
-    sess = _FakeSession([5, 4, 47])
+    sess = _FakeSession([5, 4, 47, 1])
     out = FuturesPaperRepository(sess).reset_account("demo")
     assert out == {"positions": 5, "equity": 4, "trades": 47}
-    # удаляет ровно три таблицы СЧЁТА — обучающий датасет (futures_candles/decisions) не трогает
+    # удаляет три таблицы счёта + сбрасывает futures_risk_state — обучающий датасет не трогает
     assert set(sess.deleted_tables) == {
-        "futures_paper_positions", "futures_paper_equity", "futures_paper_trades"}
+        "futures_paper_positions", "futures_paper_equity", "futures_paper_trades", "futures_risk_state"}
