@@ -1,2 +1,0 @@
-## 2026-07-17T06:11:03Z
-Identify the copy-pasted SeqClsAdapter loading logic in src/geoanalytics/nlp/classify.py, significance.py, temporal.py, and aspect.py. Inspect sentiment.py for _is_full_model(). Identify private imports from numeric.py in fundamentals.py. Inspect test structure under tests/ to see how to add unit tests for nlp/ner.py, nlp/embeddings.py, nlp/llm.py, and the new nlp/_seqcls.py. Write your report to /home/ijstt/News/.agents/explorer_nlp_3/analysis.md.

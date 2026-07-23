@@ -71,6 +71,10 @@ docker-compose.override.yml
 logs/
 graphify-out/
 
+# Agent Workspaces & Tool Artifacts
+.agents/
+.claude/
+
 # IDE & OS Clutter
 .idea/
 .vscode/
@@ -78,4 +82,5 @@ graphify-out/
 *~
 .DS_Store
 Thumbs.db
+
 
