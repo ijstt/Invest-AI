@@ -39,6 +39,12 @@ MIN_EDGE_COST_MULT = 1.5
 # Режимы рынка (L5), в которых НЕ открываем новые позиции: в кризис волатильность/гэпы/проскальз.
 # выше, а эдж там недоказан (мало кризисных данных). Выходы при этом разрешены — дериск, не вход.
 BLOCKED_REGIMES = ("кризис",)
+# Адаптивный режим в кризис (выбор пользователя): вместо 100% блокировки разрешить входы с
+# сокращённым сайзингом (-60% риска), повышенной планкой P(win) ≥0.60 и фильтром издержек ≥2.5x.
+ALLOW_CRISIS_ADAPTIVE = True
+CRISIS_RISK_SCALE_MULT = 0.4
+CRISIS_PWIN_FLOOR_MIN = 0.60
+CRISIS_MIN_EDGE_COST_MULT = 2.5
 
 
 @dataclass
@@ -179,7 +185,8 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
                     trade_evening: bool = TRADE_EVENING,
                     trade_weekend: bool = TRADE_WEEKEND,
                     barrier_exit: bool = BARRIER_EXIT,
-                    min_edge_cost_mult: float = MIN_EDGE_COST_MULT) -> PaperResult:
+                    min_edge_cost_mult: float = MIN_EDGE_COST_MULT,
+                    allow_crisis_adaptive: bool = ALLOW_CRISIS_ADAPTIVE) -> PaperResult:
     """Один бумажный цикл: квалифицированные чемпионы решают вход/выход на свежих барах.
 
     Идемпотентно по смыслу (повтор в тот же бар не открывает дубль — позиция уже есть). Сбой
@@ -214,10 +221,15 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
 
     limits = limits or RiskLimits()
 
-    # Текущий режим рынка (L5): в кризис новые входы блокируются (адаптивность к контексту).
+    # Текущий режим рынка (L5): в кризис входы либо блокируются (по умолчанию), либо масштабируются
+    # под адаптивный режим (-60% риска, P(win)≥0.60, издержки≥2.5x).
     latest_regime = MarketRegimeRepository(session).latest()
     res.regime = latest_regime.label if latest_regime else ""
-    regime_blocked = regime_blocks_entry(latest_regime, block_regimes)
+    is_crisis = bool(latest_regime and latest_regime.label in BLOCKED_REGIMES)
+    if is_crisis and allow_crisis_adaptive:
+        regime_blocked = False
+    else:
+        regime_blocked = is_crisis
 
     # Mark-to-market эквити: реализ.+нереализ. (спеки открытых позиций — для MTM и маржи).
     positions_now = repo.positions(account)
@@ -291,7 +303,8 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
                     pwin_floor=eff_pwin_floor,
                     session_discipline=session_discipline, flat_before_min=flat_before_min,
                     trade_evening=trade_evening, trade_weekend=trade_weekend,
-                    barrier_exit=barrier_exit, min_edge_cost_mult=min_edge_cost_mult)
+                    barrier_exit=barrier_exit, min_edge_cost_mult=min_edge_cost_mult,
+                    is_crisis=is_crisis)
 
     qualified: list[str] = []
     champs_by_strat: dict = {}
@@ -397,6 +410,7 @@ class _CycleCtx:
     trade_weekend: bool = True
     barrier_exit: bool = True
     min_edge_cost_mult: float = 1.5
+    is_crisis: bool = False
 
 
 def _step_instrument(ctx: _CycleCtx, model, champ, tk: str, strat: str, res: PaperResult) -> None:
@@ -554,29 +568,29 @@ def _step_instrument(ctx: _CycleCtx, model, champ, tk: str, strat: str, res: Pap
         p = model.score(serve_feats, dir_)
         vol = bar_return_std(closes, last) or 0.0
         # Cost-aware гейт (Tier A#2): ожидаемый ход до take-profit (+UP_MULT·σ) должен покрывать
-        # издержки полного оборота (комиссия+проскальзывание) с запасом — иначе сетап заведомо
-        # съест издержки (прямо бьёт в PF<1). Сравнение на 1 контракт (qty-независимо).
+        # издержки полного оборота (комиссия+проскальзывание) с запасом. В кризис требуем ≥2.5x.
         from geoanalytics.futrader.exits import UP_MULT
         exp_move_rub = spec.pnl_rub(UP_MULT * vol * price, 1)
         cost_rub = round_trip_cost_rub(spec, 1)
-        if vol > 0 and exp_move_rub < ctx.min_edge_cost_mult * cost_rub:
+        eff_cost_mult = (max(ctx.min_edge_cost_mult, CRISIS_MIN_EDGE_COST_MULT)
+                         if getattr(ctx, "is_crisis", False) else ctx.min_edge_cost_mult)
+        if vol > 0 and exp_move_rub < eff_cost_mult * cost_rub:
             res.blocked_cost += 1
             repo.log_trade(account=account, asset_code=code, interval=interval, source=strat,
                            action="buy" if dir_ > 0 else "sell", signed_qty=0, price=price,
                            reason="cost")
             return
-        # Целевой риск масштабируем просадкой (плавный де-риск) И уверенностью совокупности (A5:
-        # сильнее согласие доказательств → больше риск).
+        # Целевой риск масштабируем просадкой (плавный де-риск) И уверенностью совокупности (A5),
+        # а также срезаем на -60% во время адаптивного кризисного режима.
         conv_mult = conv.risk_multiplier if conv is not None else 1.0
-        # ОСТОРОЖНОСТЬ на тонкой сессии (рабочая суббота/вечерняя): ликвидность кратно ниже →
-        # срезаем целевой риск (меньше размер, шире эффект проскальзывания и так против нас).
         liq_mult = (LOW_LIQUIDITY_RISK_SCALE
                     if low_liquidity_session(last_ts, evening=ctx.trade_evening) else 1.0)
-        risk = ctx.target_risk_pct * ctx.risk_scale * conv_mult * liq_mult
-        # Абсолютный пол порога мета-фильтра (pwin_floor): эфф. порог = min(порог чемпиона, floor)
-        # при floor>0, иначе порог чемпиона. Тонкая выборка делает P(win) переуверенным → floor даёт
-        # quality-проверенным чемпионам торговать сетапы с P(win) ≥ floor (напр. 0.40).
-        eff_threshold = (min(champ.threshold, ctx.pwin_floor) if ctx.pwin_floor > 0
+        crisis_mult = CRISIS_RISK_SCALE_MULT if getattr(ctx, "is_crisis", False) else 1.0
+        risk = ctx.target_risk_pct * ctx.risk_scale * conv_mult * liq_mult * crisis_mult
+        # Абсолютный пол порога мета-фильтра: в кризис требуем P(win) ≥ 0.60 (высокая уверенность)
+        eff_floor = (max(ctx.pwin_floor, CRISIS_PWIN_FLOOR_MIN)
+                     if getattr(ctx, "is_crisis", False) else ctx.pwin_floor)
+        eff_threshold = (min(champ.threshold, eff_floor) if eff_floor > 0
                          else champ.threshold)
         qty = position_size(p, equity=ctx.equity, price=price, vol_fraction=vol, spec=spec,
                             threshold=eff_threshold, target_risk_pct=risk, max_qty=ctx.max_qty)
