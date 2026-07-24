@@ -161,6 +161,30 @@ def build_instrument_returns(session, tickers, *, interval: str = "1d",
             continue
         bars = series.bars[-days:] if days else series.bars
         levels = {b.ts.date(): b.close for b in bars}
-        if len(levels) >= 2:
-            out[_asset_code_for(tk)] = _returns_by_date(levels)
+    return out
+
+
+def build_intraday_returns(session, tickers, *, interval: str = "1h",
+                           limit: int = 120) -> dict[str, dict[datetime, float]]:
+    """Интрадей-доходности по отметкам времени для динамической интрадей корреляционной матрицы."""
+    from datetime import datetime
+    from geoanalytics.futrader.continuous import continuous_series
+    from geoanalytics.futrader.data import _asset_code_for
+
+    out: dict[str, dict[datetime, float]] = {}
+    for tk in tickers:
+        try:
+            series = continuous_series(session, tk, interval=interval)
+        except Exception:  # noqa: BLE001 — один инструмент не валит остальные
+            continue
+        bars = series.bars[-limit:] if limit else series.bars
+        if len(bars) >= 2:
+            rets: dict[datetime, float] = {}
+            for i in range(1, len(bars)):
+                prev = bars[i - 1].close
+                curr = bars[i].close
+                if prev > 0:
+                    rets[bars[i].ts] = (curr / prev - 1.0) * 100.0
+            if rets:
+                out[_asset_code_for(tk)] = rets
     return out

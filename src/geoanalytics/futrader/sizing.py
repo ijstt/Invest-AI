@@ -16,11 +16,18 @@ from __future__ import annotations
 from geoanalytics.futrader.evaluation import max_drawdown
 
 
-def contract_risk_rub(price: float, vol_fraction: float, spec) -> float:
-    """Рублёвая σ 1-барного хода ОДНОГО контракта: |σ|·(price/tick)·tick_value."""
-    if not spec.tick_size:
+VOL_FLOOR_FRACTION = 0.005  # 0.5% минимальный пол волатильности для робастного сайзинга
+
+
+def contract_risk_rub(price: float, vol_fraction: float, spec, *,
+                      min_vol_fraction: float = VOL_FLOOR_FRACTION) -> float:
+    """Рублёвая σ 1-барного хода ОДНОГО контракта: |σ|·(price/tick)·tick_value.
+
+    Робастность: эффективный vol не ниже min_vol_fraction при vol_fraction>0 (защита от занижения риска)."""
+    if not spec or not getattr(spec, "tick_size", 0.0) or vol_fraction <= 0:
         return 0.0
-    return abs(vol_fraction) * (price / spec.tick_size) * spec.tick_value
+    eff_vol = max(vol_fraction, min_vol_fraction)
+    return eff_vol * (price / spec.tick_size) * spec.tick_value
 
 
 def kelly_fraction(p_win: float, payoff_ratio: float = 1.0) -> float:

@@ -72,6 +72,13 @@ class TestEntryAllowed:
     def test_clearing_blocked(self):
         assert S.entry_allowed(ts(14, 2)) is False
 
+    def test_clearing_buffer_blocked(self):
+        # Буфер клиринга 18:40-19:10 блокирует новый вход
+        assert S.in_clearing_window(ts(18, 45)) is True
+        assert S.in_clearing_window(ts(19, 0)) is True
+        assert S.entry_allowed(ts(18, 45)) is False
+        assert S.entry_allowed(ts(19, 0)) is False
+
     def test_evening_bar_main_only_blocked(self):
         assert S.entry_allowed(ts(20)) is False
         assert S.entry_allowed(ts(20), evening=True) is True

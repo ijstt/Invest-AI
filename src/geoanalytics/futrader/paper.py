@@ -255,10 +255,25 @@ def run_paper_cycle(session, *, account: str = DEFAULT_ACCOUNT, interval: str = 
 
     # Портфельный риск (C): корреляции инструментов + экспозиция → корр-осознанный лимит входа.
     from geoanalytics.analytics.portfolio import correlation_matrix
-    from geoanalytics.futrader.portfolio_risk import build_instrument_returns, exposure_by_code
+    from geoanalytics.futrader.portfolio_risk import (
+        build_instrument_returns,
+        build_intraday_returns,
+        exposure_by_code,
+    )
     try:
         rets_by_code = build_instrument_returns(session, tickers)
         corr_map = correlation_matrix(rets_by_code)
+        try:
+            intra_rets = build_intraday_returns(session, tickers, interval=interval, limit=120)
+            if intra_rets:
+                intra_corr = correlation_matrix(intra_rets)
+                for k, v in intra_corr.items():
+                    if k in corr_map:
+                        corr_map[k] = round(0.5 * corr_map[k] + 0.5 * v, 4)
+                    else:
+                        corr_map[k] = round(v, 4)
+        except Exception:  # noqa: BLE001 — интрадей блендинг опционален
+            pass
     except Exception as exc:  # noqa: BLE001 — отсутствие рядов не валит цикл (лимит просто не давит)
         log.warning("paper_corr_load_failed", error=str(exc))
         corr_map = {}

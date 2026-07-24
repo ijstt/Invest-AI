@@ -91,9 +91,29 @@ def force_flat_due(ts: datetime, *, flat_before_min: float = 15, evening: bool =
     return minutes_to_close(ts, evening=evening) <= flat_before_min
 
 
+# Буферы клиринга (новых входов нет: расширенный спред/снятие стакана).
+# 1. Дневной промежуточный клиринг: 13:55–14:10 MSK (клиринг 14:00–14:05).
+# 2. Вечерний основной клиринг: 18:40–19:10 MSK (клиринг 18:45–19:00).
+CLEARING_BUFFERS = (
+    (time(13, 55), time(14, 10)),
+    (time(18, 40), time(19, 10)),
+)
+
+
+def in_clearing_window(ts: datetime) -> bool:
+    """Находится ли момент ts (MSK) в буферной зоне клиринга MOEX FORTS?"""
+    t = _msk(ts).time()
+    for start, end in CLEARING_BUFFERS:
+        if start <= t < end:
+            return True
+    return False
+
+
 def entry_allowed(ts: datetime, *, flat_before_min: float = 15, evening: bool = False,
                   allow_weekend: bool = False) -> bool:
-    """Разрешён ли НОВЫЙ вход: сессия идёт и мы НЕ в окне закрытия."""
+    """Разрешён ли НОВЫЙ вход: сессия идёт, НЕ в окне закрытия И НЕ в буфере клиринга."""
+    if in_clearing_window(ts):
+        return False
     return in_session(ts, evening=evening, allow_weekend=allow_weekend) and not force_flat_due(
         ts, flat_before_min=flat_before_min, evening=evening, allow_weekend=allow_weekend)
 

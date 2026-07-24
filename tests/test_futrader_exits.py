@@ -7,17 +7,25 @@ from geoanalytics.futrader.exits import HORIZON_BARS, barrier_exit
 
 class TestBarrierExitLong:
     def test_take_profit_on_upper_touch(self):
-        # +1.5·0.02 = +3% → TP при high ≥ 103.
-        d = barrier_exit(1, 100.0, 0.02, [101.0, 104.0], [100.5, 103.0])
+        # +2.0·0.02 = +4% → TP при high ≥ 104.
+        d = barrier_exit(1, 100.0, 0.02, [101.0, 104.5], [100.5, 103.0])
         assert d.should_exit and d.reason == "take_profit"
 
     def test_stop_loss_on_lower_touch(self):
-        d = barrier_exit(1, 100.0, 0.02, [100.0, 98.0], [99.0, 96.0])
+        # -1.0·0.02 = -2% → SL при low ≤ 98.
+        d = barrier_exit(1, 100.0, 0.02, [100.0, 98.5], [99.0, 97.5])
         assert d.should_exit and d.reason == "stop_loss"
 
+    def test_trailing_stop_activation_and_exit(self):
+        # Пик подскочил до 102.5 (+2.5% >= +1.0σ activations = +2%), зафиксировав трейлинг.
+        # Новый подтянутый стоп = 102.5 * (1 - 1.0*0.02) = 100.45.
+        # Следующая свеча пробивает low 100.0 <= 100.45 -> trailing_stop!
+        d = barrier_exit(1, 100.0, 0.02, [102.5, 101.0], [101.5, 100.0])
+        assert d.should_exit and d.reason == "trailing_stop"
+
     def test_pessimism_both_in_one_bar_takes_stop(self):
-        # бар задевает ОБА барьера (low 96 ≤ 97, high 104 ≥ 103) — берём стоп.
-        d = barrier_exit(1, 100.0, 0.02, [104.0], [96.0])
+        # бар задевает ОБА барьера (low 97 ≤ 98, high 105 ≥ 104) — берём стоп.
+        d = barrier_exit(1, 100.0, 0.02, [105.0], [97.0])
         assert d.should_exit and d.reason == "stop_loss"
 
     def test_hold_when_inside_barriers(self):
@@ -27,13 +35,13 @@ class TestBarrierExitLong:
 
 class TestBarrierExitShort:
     def test_take_profit_on_price_fall(self):
-        # шорт прибылен при падении: low ≤ 97 = take-profit.
-        d = barrier_exit(-1, 100.0, 0.02, [100.0, 99.0], [99.0, 96.5])
+        # шорт прибылен при падении: low ≤ 96 (-4%) = take-profit.
+        d = barrier_exit(-1, 100.0, 0.02, [100.0, 99.0], [99.0, 95.5])
         assert d.should_exit and d.reason == "take_profit"
 
     def test_stop_loss_on_price_rise(self):
-        # шорт: рост к верхнему барьеру (high ≥ 103) = stop-loss.
-        d = barrier_exit(-1, 100.0, 0.02, [101.0, 103.5], [100.5, 102.0])
+        # шорт: рост к верхнему барьеру (+2% = high ≥ 102) = stop-loss.
+        d = barrier_exit(-1, 100.0, 0.02, [101.0, 102.5], [100.5, 101.0])
         assert d.should_exit and d.reason == "stop_loss"
 
 
